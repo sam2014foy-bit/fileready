@@ -57,3 +57,10 @@ SELECT set_config('app.firm_id', '<firm uuid>', true);
 Follow the legal checklist in the SaaS Master Plan: data processing agreement,
 privacy notice, insurance, EU hosting with backups, and an independent
 security review.
+
+## Live database
+
+Hosted on Supabase, project `xrhzdbvtxrjjupdsgmxl`, region West EU (Ireland),
+Postgres 17. Migrations 0001–0003 applied 16 Nov 2026. Supabase's `anon` and
+`authenticated` API roles have no access to Fileready tables (migration 0002);
+the app must connect server-side as a role granted `fileready_app`.
