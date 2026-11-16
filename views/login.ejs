@@ -1,0 +1,12 @@
+<%- include('partials/head', { title: 'Log in' }) %>
+<main class="narrow">
+  <h1 class="brand-big">Fileready</h1>
+  <form method="post" action="/login" class="card">
+    <h2>Log in</h2>
+    <% if (error) { %><p class="error" role="alert"><%= error %></p><% } %>
+    <label>Email <input type="email" name="email" value="<%= email %>" autocomplete="username" required autofocus></label>
+    <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+    <button class="btn">Log in</button>
+  </form>
+</main>
+</body></html>

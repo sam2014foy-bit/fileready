@@ -1,0 +1,15 @@
+<%- include('partials/head', { title: 'Clients' }) %>
+<%- include('partials/nav') %>
+<div class="row between"><h1>Clients</h1><a class="btn" href="/clients/new">+ New client</a></div>
+<% if (!clients.length) { %><p class="muted">No clients yet.</p><% } else { %>
+<table class="list">
+  <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Cases</th><th></th></tr></thead>
+  <tbody>
+  <% for (const c of clients) { %>
+    <tr><td><%= c.first_name %> <%= c.last_name %></td><td><%= c.email || '' %></td><td><%= c.phone || '' %></td>
+        <td><%= c.case_count %></td><td><a href="/cases/new?client=<%= c.id %>">New case</a></td></tr>
+  <% } %>
+  </tbody>
+</table>
+<% } %>
+<%- include('partials/foot') %>

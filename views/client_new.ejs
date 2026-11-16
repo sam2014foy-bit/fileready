@@ -1,0 +1,16 @@
+<%- include('partials/head', { title: 'New client' }) %>
+<%- include('partials/nav') %>
+<form method="post" action="/clients" class="card narrow">
+  <h1>New client</h1>
+  <% if (error) { %><p class="error" role="alert"><%= error %></p><% } %>
+  <input type="hidden" name="_csrf" value="<%= csrf %>">
+  <div class="two">
+    <label>First name <input name="first_name" value="<%= values.first_name || '' %>" required></label>
+    <label>Last name <input name="last_name" value="<%= values.last_name || '' %>" required></label>
+  </div>
+  <label>Email <input type="email" name="email" value="<%= values.email || '' %>"></label>
+  <label>Mobile <input type="tel" name="phone" value="<%= values.phone || '' %>" placeholder="+353…"></label>
+  <p class="muted small">Email or mobile is needed so reminders can reach them.</p>
+  <button class="btn">Save and start a case</button>
+</form>
+<%- include('partials/foot') %>

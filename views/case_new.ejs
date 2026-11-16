@@ -1,0 +1,22 @@
+<%- include('partials/head', { title: 'New case' }) %>
+<%- include('partials/nav') %>
+<form method="post" action="/cases" class="card narrow">
+  <h1>New case</h1>
+  <input type="hidden" name="_csrf" value="<%= csrf %>">
+  <label>Client
+    <select name="client_id" required>
+      <option value="">Choose…</option>
+      <% for (const c of clients) { %><option value="<%= c.id %>" <%= c.id === selected ? 'selected' : '' %>><%= c.last_name %>, <%= c.first_name %></option><% } %>
+    </select>
+  </label>
+  <label>Case name <input name="title" value="Mortgage application" required></label>
+  <label>Lender <input name="lender" placeholder="Optional"></label>
+  <label>Document checklist
+    <select name="template_id">
+      <% for (const t of templates) { %><option value="<%= t.id %>"><%= t.name %></option><% } %>
+      <option value="">Start empty</option>
+    </select>
+  </label>
+  <button class="btn">Create case</button>
+</form>
+<%- include('partials/foot') %>

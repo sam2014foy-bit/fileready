@@ -1,0 +1,4 @@
+<%- include('partials/head', { title: 'Error' }) %>
+<% if (typeof user !== 'undefined' && user) { %><%- include('partials/nav') %><% } else { %><main class="narrow"><% } %>
+  <div class="card"><p><%= message %></p><p><a href="/">Back to start</a></p></div>
+</main></body></html>

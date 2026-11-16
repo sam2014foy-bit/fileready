@@ -1,0 +1,29 @@
+<%- include('partials/head', { title: 'Upload documents' }) %>
+<main class="narrow client">
+  <p class="muted small"><%= info.firm_name %></p>
+  <h1>Hi <%= info.first_name %>, here's what we need</h1>
+  <p>Upload each document below. PDFs and phone photos are fine, up to 25 MB each. You can come back to this page any time while the link is active.</p>
+  <% if (message) { %><p class="ok" role="status"><%= message %></p><% } %>
+  <% if (error) { %><p class="error" role="alert"><%= error %></p><% } %>
+  <ul class="checklist client">
+  <% for (const r of requests) { const done = ['accepted','waived'].includes(r.status); %>
+    <li class="item status-<%= r.status %>">
+      <div class="item-main">
+        <strong><%= r.label %></strong><% if (!r.required) { %> <span class="muted small">(if it applies)</span><% } %>
+        <% if (r.help_text) { %><div class="muted small"><%= r.help_text %></div><% } %>
+        <% if (r.status === 'rejected') { %><div class="small bad-text">Please upload again: <%= r.rejected_reason %></div><% } %>
+        <% if (r.status === 'received') { %><div class="small">Received, thanks. Your broker will check it.</div><% } %>
+        <% if (done) { %><div class="small good-text"><%= r.status === 'accepted' ? 'All done ✓' : 'Not needed' %></div><% } %>
+      </div>
+      <% if (!done) { %>
+      <form method="post" action="/u/<%= token %>/<%= r.id %>" enctype="multipart/form-data" class="item-side">
+        <input type="file" name="file" accept="application/pdf,image/jpeg,image/png,image/heic" required>
+        <button class="btn small"><%= r.file_count ? 'Upload another' : 'Upload' %></button>
+      </form>
+      <% } %>
+    </li>
+  <% } %>
+  </ul>
+  <p class="muted small">Your files are sent securely to <%= info.firm_name %> and stored in Ireland.</p>
+</main>
+</body></html>

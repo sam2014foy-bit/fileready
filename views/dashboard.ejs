@@ -1,0 +1,34 @@
+<%- include('partials/head', { title: 'Cases' }) %>
+<%- include('partials/nav') %>
+<div class="row between">
+  <h1>Cases</h1>
+  <div class="tabs">
+    <% for (const [k, label] of [['open','Open'],['complete','Complete'],['all','All']]) { %>
+      <a href="/?show=<%= k %>" class="<%= filter === k ? 'active' : '' %>"><%= label %></a>
+    <% } %>
+  </div>
+</div>
+<% if (!cases.length) { %>
+  <div class="empty card">
+    <p>No <%= filter === 'all' ? '' : filter %> cases yet.</p>
+    <a class="btn" href="/clients/new">Add your first client</a>
+  </div>
+<% } else { %>
+<table class="list">
+  <thead><tr><th>Client</th><th>Case</th><th>Documents</th><th>Needs you</th><th>Status</th></tr></thead>
+  <tbody>
+  <% for (const c of cases) { const pct = c.required_total ? Math.round(100 * c.required_done / c.required_total) : 0; %>
+    <tr>
+      <td><a href="/cases/<%= c.id %>"><%= c.first_name %> <%= c.last_name %></a></td>
+      <td><%= c.title %><% if (c.lender) { %> <span class="muted">· <%= c.lender %></span><% } %></td>
+      <td><div class="bar" title="<%= c.required_done %> of <%= c.required_total %> required"><span style="width:<%= pct %>%"></span></div>
+          <span class="muted small"><%= c.required_done %>/<%= c.required_total %></span></td>
+      <td><% if (c.awaiting_review) { %><span class="pill warn"><%= c.awaiting_review %> to review</span><% } %>
+          <% if (c.rejected) { %><span class="pill bad"><%= c.rejected %> rejected</span><% } %></td>
+      <td><span class="pill <%= c.status === 'complete' ? 'good' : '' %>"><%= c.status === 'complete' ? 'File complete' : c.status[0].toUpperCase() + c.status.slice(1) %></span></td>
+    </tr>
+  <% } %>
+  </tbody>
+</table>
+<% } %>
+<%- include('partials/foot') %>

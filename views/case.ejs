@@ -1,0 +1,93 @@
+<%- include('partials/head', { title: kase.first_name + ' ' + kase.last_name }) %>
+<%- include('partials/nav') %>
+<p class="muted small"><a href="/">← Cases</a></p>
+<div class="row between">
+  <div>
+    <h1><%= kase.first_name %> <%= kase.last_name %></h1>
+    <p class="muted"><%= kase.title %><% if (kase.lender) { %> · <%= kase.lender %><% } %>
+      <% if (kase.client_email) { %> · <%= kase.client_email %><% } %><% if (kase.client_phone) { %> · <%= kase.client_phone %><% } %></p>
+  </div>
+  <span class="pill big <%= kase.status === 'complete' ? 'good' : '' %>"><%= kase.status === 'complete' ? 'File complete' : kase.status[0].toUpperCase() + kase.status.slice(1) %></span>
+</div>
+
+<% if (newLink) { %>
+<div class="card highlight">
+  <h3>Upload link for <%= kase.first_name %></h3>
+  <p>Copy this now and send it to your client. For security it won't be shown again. It works for 14 days.</p>
+  <input class="copy" readonly value="<%= newLink %>">
+</div>
+<% } %>
+
+<section class="card">
+  <div class="row between">
+    <h2>Documents</h2>
+    <form method="post" action="/cases/<%= kase.id %>/links"><input type="hidden" name="_csrf" value="<%= csrf %>">
+      <button class="btn small"><%= links.length ? 'New upload link' : 'Create upload link' %></button></form>
+  </div>
+  <% if (!requests.length) { %><p class="muted">No documents on the checklist yet. Add one below.</p><% } %>
+  <ul class="checklist">
+  <% for (const r of requests) { %>
+    <li class="item status-<%= r.status %>">
+      <div class="item-main">
+        <strong><%= r.label %></strong><% if (!r.required) { %> <span class="muted small">(optional)</span><% } %>
+        <% if (r.help_text) { %><div class="muted small"><%= r.help_text %></div><% } %>
+        <% if (r.status === 'rejected') { %><div class="small bad-text">Rejected: <%= r.rejected_reason %></div><% } %>
+        <% for (const d of r.documents) { %>
+          <div class="small file"><a href="/documents/<%= d.id %>"><%= d.original_filename %></a>
+            <span class="muted"><%= d.size_bytes < 1048576 ? Math.max(1, Math.round(d.size_bytes / 1024)) + ' KB' : (d.size_bytes / 1048576).toFixed(1) + ' MB' %> · <%= new Date(d.uploaded_at).toLocaleString('en-IE', { dateStyle: 'medium', timeStyle: 'short' }) %></span></div>
+        <% } %>
+      </div>
+      <div class="item-side">
+        <span class="pill <%= { accepted: 'good', waived: 'good', received: 'warn', rejected: 'bad' }[r.status] || '' %>"><%= r.status[0].toUpperCase() + r.status.slice(1) %></span>
+        <div class="actions">
+          <% const act = (a, label, cls) => { %>
+            <form method="post" action="/cases/<%= kase.id %>/requests/<%= r.id %>"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="action" value="<%= a %>"><button class="link <%= cls || '' %>"><%= label %></button></form>
+          <% } %>
+          <% if (r.status === 'received') { act('accept', 'Accept'); } %>
+          <% if (['requested','received','rejected'].includes(r.status)) { act('waive', 'Not needed'); } %>
+          <% if (['accepted','waived'].includes(r.status)) { act('reopen', 'Reopen'); } %>
+        </div>
+        <% if (['received','accepted'].includes(r.status)) { %>
+          <form method="post" action="/cases/<%= kase.id %>/requests/<%= r.id %>" class="reject">
+            <input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="action" value="reject">
+            <input name="reason" placeholder="Reason, e.g. blurry" required maxlength="300"><button class="link bad-text">Reject</button>
+          </form>
+        <% } %>
+      </div>
+    </li>
+  <% } %>
+  </ul>
+  <form method="post" action="/cases/<%= kase.id %>/requests" class="row add">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <input name="label" placeholder="Add a document, e.g. P60 for 2025" required maxlength="150">
+    <label class="inline"><input type="checkbox" name="required" checked> Required</label>
+    <button class="btn small">Add</button>
+  </form>
+</section>
+
+<% if (links.length) { %>
+<section class="card">
+  <h2>Active upload links</h2>
+  <ul class="plain">
+  <% for (const l of links) { %>
+    <li class="row between">
+      <span class="small">Created <%= new Date(l.created_at).toLocaleDateString('en-IE') %> · expires <%= new Date(l.expires_at).toLocaleDateString('en-IE') %>
+        · <%= l.last_used_at ? 'last opened ' + new Date(l.last_used_at).toLocaleString('en-IE', { dateStyle: 'medium', timeStyle: 'short' }) : 'not opened yet' %></span>
+      <form method="post" action="/cases/<%= kase.id %>/links/<%= l.id %>/revoke"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link bad-text">Turn off</button></form>
+    </li>
+  <% } %>
+  </ul>
+</section>
+<% } %>
+
+<section class="card">
+  <h2>History</h2>
+  <ul class="plain history small">
+  <% for (const h of history) { %>
+    <li><span class="muted"><%= new Date(h.created_at).toLocaleString('en-IE', { dateStyle: 'medium', timeStyle: 'short' }) %></span>
+      <%= h.actor_type === 'client' ? 'Client' : (h.full_name || 'System') %> · <%= h.action.replace('.', ' ').replace('_', ' ') %>
+      <% if (h.details && h.details.reason) { %>: <%= h.details.reason %><% } %></li>
+  <% } %>
+  </ul>
+</section>
+<%- include('partials/foot') %>

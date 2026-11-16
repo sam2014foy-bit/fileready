@@ -10,12 +10,21 @@
   "scripts": {
     "db:migrate": "node db/migrate.js",
     "db:seed": "node db/seed.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "dev": "node src/dev.js",
+    "start": "node src/server.js",
+    "create-firm": "node scripts/create-firm.js"
   },
   "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "ejs": "^7.0.2",
+    "express": "^5.3.0",
+    "helmet": "^8.3.0",
+    "multer": "^2.5.0",
     "pg": "^8.23.1"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.16"
+    "@electric-sql/pglite": "^0.5.16",
+    "supertest": "^7.3.2"
   }
 }
