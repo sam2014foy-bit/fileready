@@ -17,7 +17,7 @@ required is in. Built for small Irish brokerages.
   only for items still missing; rejection triggers a reminder within 10 minutes;
   stops when complete, paused, or after the firm's limit (default 6). Each email
   carries a fresh upload link and turns off older ones. Email via Brevo (EU).
-  Scheduled by Supabase pg_cron calling `POST /internal/reminders/run`.
+  Scheduled by Supabase pg_cron calling `POST /internal/reminders/run` (setup in `db/supabase-scheduler.sql`). Live app: https://fileready-kgk1.onrender.com
 - Next: password reset by email, staff management, firm settings page.
 
 ## Try it on your computer
