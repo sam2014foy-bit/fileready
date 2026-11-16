@@ -231,3 +231,23 @@ test('pages use Referrer-Policy same-origin, so browsers send a real Origin on o
     assert.equal(res.headers['referrer-policy'], 'same-origin', url);
   }
 });
+
+test('changing password: checks the current one, then only the new one works', async () => {
+  const { agent, csrf } = await login('a@brokers.test');
+  const post = (body) => agent.post('/account/password').type('form').send({ _csrf: csrf, ...body });
+  assert.equal((await post({ current: 'wrong-current-pw', new_password: 'a-brand-new-passphrase', confirm: 'a-brand-new-passphrase' })).status, 400);
+  assert.equal((await post({ current: 'correct-horse-battery', new_password: 'a-brand-new-passphrase', confirm: 'something-else-entirely' })).status, 400);
+  assert.equal((await post({ current: 'correct-horse-battery', new_password: 'short', confirm: 'short' })).status, 400);
+  const ok = await post({ current: 'correct-horse-battery', new_password: 'a-brand-new-passphrase', confirm: 'a-brand-new-passphrase' });
+  assert.equal(ok.status, 200);
+  assert.match(ok.text, /Password changed/);
+  const old = await request(app).post('/login').type('form').send({ email: 'a@brokers.test', password: 'correct-horse-battery' });
+  assert.equal(old.status, 401);
+  await login('a@brokers.test', 'a-brand-new-passphrase');
+});
+
+test('health check answers without a login', async () => {
+  const res = await request(app).get('/healthz');
+  assert.equal(res.status, 200);
+  assert.equal(res.text, 'ok');
+});

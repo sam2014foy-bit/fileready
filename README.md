@@ -9,8 +9,10 @@ required is in. Built for small Irish brokerages.
 - Done: database (live on Supabase), web app first slice: broker login,
   clients, cases with checklist, accept / reject / not needed, client upload
   page, file download, audit history.
-- Next: email reminders, Supabase Storage for files, password change/reset,
-  staff management, hosting.
+- Hosting: Render (Frankfurt) via `render.yaml`; files in a private Supabase
+  Storage bucket in Ireland; app connects as `fileready_web` through the
+  Supabase session pooler.
+- Next: email reminders, password reset by email, staff management.
 
 ## Try it on your computer
 
@@ -90,6 +92,15 @@ security review.
 ## Live database
 
 Hosted on Supabase, project `xrhzdbvtxrjjupdsgmxl`, region West EU (Ireland),
-Postgres 17. Migrations 0001–0004 applied 16 Nov 2026. Currently on the free plan: upgrade to Pro (backups) before any real client data. Supabase's `anon` and
+Postgres 17. Migrations 0001–0005 applied 16 Nov 2026. Currently on the free plan: upgrade to Pro (backups) before any real client data. Supabase's `anon` and
 `authenticated` API roles have no access to Fileready tables (migration 0002);
 the app must connect server-side as a role granted `fileready_app`.
+
+## Deploying (Render)
+
+1. Supabase SQL editor, once: `ALTER ROLE fileready_web WITH LOGIN PASSWORD '<long random password>';`
+2. Supabase > Storage > S3: create an access key pair (storage only).
+3. Supabase > Connect > Session pooler: copy the host (`aws-…-eu-west-1.pooler.supabase.com`).
+4. Render > New > Blueprint > this repo. Fill in `DATABASE_HOST`, `DATABASE_PASSWORD`,
+   `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`.
+5. Before real client data: Supabase Pro, Render paid plan, set `DATABASE_CA`, security review.

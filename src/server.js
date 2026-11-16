@@ -1,25 +1,73 @@
-// Production entry point.
-// Env: DATABASE_URL (a login role granted fileready_app, NOT the postgres owner),
-//      BASE_URL (e.g. https://app.fileready.ie), PORT, STORAGE_DIR.
+// Production entry point (Render). Settings come from environment variables:
+//
+// Database (Supabase session pooler, IPv4):
+//   SUPABASE_PROJECT_REF   e.g. xrhzdbvtxrjjupdsgmxl
+//   DATABASE_HOST          the Session pooler host, e.g. aws-0-eu-west-1.pooler.supabase.com
+//   DATABASE_PASSWORD      password of the fileready_web role
+//   DATABASE_CA            optional: Supabase's SSL certificate (PEM) to verify the server
+//   (or DATABASE_URL instead of the three above)
+// Files (Supabase Storage, S3-compatible, storage-only keys):
+//   S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET (documents), S3_REGION (eu-west-1)
+//   S3_ENDPOINT            optional, defaults to https://<ref>.storage.supabase.co/storage/v1/s3
+// Web:
+//   BASE_URL               optional on Render (RENDER_EXTERNAL_URL is used)
 import pg from 'pg';
 import { createApp } from './app.js';
 import { createDb, pgDriver } from './db.js';
-import { localDiskStorage } from './storage.js';
+import { localDiskStorage, s3Storage } from './storage.js';
 
-const { DATABASE_URL, BASE_URL, PORT = 3000, STORAGE_DIR = './storage' } = process.env;
-if (!DATABASE_URL || !BASE_URL) {
-  console.error('Set DATABASE_URL and BASE_URL.');
+const env = process.env;
+const baseUrl = env.BASE_URL || env.RENDER_EXTERNAL_URL;
+const ref = env.SUPABASE_PROJECT_REF;
+
+function fail(msg) {
+  console.error(`Configuration error: ${msg}`);
   process.exit(1);
 }
+if (!baseUrl) fail('set BASE_URL');
 
-// Verify the database's TLS certificate when its CA is provided (Supabase:
-// Project Settings > Database > SSL certificate). Set DATABASE_CA before live use.
-const ssl = process.env.DATABASE_CA ? { ca: process.env.DATABASE_CA } : { rejectUnauthorized: false };
-if (!process.env.DATABASE_CA) console.warn('DATABASE_CA not set: database certificate is not being verified.');
-const pool = new pg.Pool({ connectionString: DATABASE_URL, max: 5, ssl });
-const db = createDb(pgDriver(pool));
-// TODO before real client data: swap for the Supabase Storage adapter (private EU bucket).
-const storage = localDiskStorage(STORAGE_DIR);
+const ssl = env.DATABASE_CA ? { ca: env.DATABASE_CA.replace(/\\n/g, '\n') } : { rejectUnauthorized: false };
+if (!env.DATABASE_CA) console.warn('DATABASE_CA not set: the database certificate is not verified. Set it before real client data.');
 
-const app = createApp({ db, storage, config: { baseUrl: BASE_URL, secureCookies: BASE_URL.startsWith('https://') } });
-app.listen(PORT, () => console.log(`Fileready listening on ${PORT}`));
+let poolConfig;
+if (env.DATABASE_URL) {
+  poolConfig = { connectionString: env.DATABASE_URL };
+} else {
+  if (!ref || !env.DATABASE_HOST || !env.DATABASE_PASSWORD) fail('set SUPABASE_PROJECT_REF, DATABASE_HOST and DATABASE_PASSWORD (or DATABASE_URL)');
+  poolConfig = {
+    host: env.DATABASE_HOST.trim(),
+    port: Number(env.DATABASE_PORT || 5432),
+    database: 'postgres',
+    user: `fileready_web.${ref}`, // Supavisor needs <role>.<project ref>
+    password: env.DATABASE_PASSWORD,
+  };
+}
+const pool = new pg.Pool({ ...poolConfig, ssl, max: 5, idleTimeoutMillis: 30000 });
+pool.on('error', (err) => console.error('Database pool error:', err.message));
+
+let storage;
+if (env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY) {
+  storage = await s3Storage({
+    bucket: env.S3_BUCKET || 'documents',
+    config: {
+      endpoint: env.S3_ENDPOINT || `https://${ref}.storage.supabase.co/storage/v1/s3`,
+      region: env.S3_REGION || 'eu-west-1',
+      accessKeyId: env.S3_ACCESS_KEY_ID,
+      secretAccessKey: env.S3_SECRET_ACCESS_KEY,
+    },
+  });
+} else {
+  console.warn('S3 keys not set: files are saved on this server\'s disk and will be lost on restart.');
+  storage = localDiskStorage(env.STORAGE_DIR || './storage');
+}
+
+// Fail fast if the database login is wrong.
+try {
+  const db = createDb(pgDriver(pool));
+  await db.asApp((q) => q('SELECT 1'));
+  const app = createApp({ db, storage, config: { baseUrl, secureCookies: baseUrl.startsWith('https://') } });
+  const port = Number(env.PORT || 3000);
+  app.listen(port, () => console.log(`Fileready listening on ${port} as ${baseUrl}`));
+} catch (err) {
+  fail(`could not connect to the database: ${err.message}`);
+}

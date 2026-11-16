@@ -7,8 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { audit } from './db.js';
 import {
-  verifyPassword, burnPasswordCheck, randomToken, sha256, csrfTokenFor, safeEqual,
-  createLoginLimiter, detectFileType,
+  verifyPassword, burnPasswordCheck, hashPassword, MIN_PASSWORD_LENGTH, randomToken, sha256,
+  csrfTokenFor, safeEqual, createLoginLimiter, detectFileType,
 } from './security.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -41,6 +41,7 @@ export function createApp({ db, storage, config }) {
     referrerPolicy: { policy: 'same-origin' },
   }));
   app.use('/static', express.static(path.join(ROOT, 'public'), { maxAge: '1h' }));
+  app.get('/healthz', (req, res) => res.type('text').send('ok'));
   app.use(cookieParser());
   app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 
@@ -111,6 +112,26 @@ export function createApp({ db, storage, config }) {
     await db.asApp((q) => q('SELECT session_revoke($1)', [sha256(req.sessionToken)]));
     res.clearCookie(SESSION_COOKIE, { path: '/' });
     res.redirect('/login');
+  });
+
+  app.get('/account/password', requireUser, (req, res) => res.render('password', { error: null, done: false }));
+
+  app.post('/account/password', requireUser, requireCsrf, async (req, res) => {
+    const current = String(req.body.current || '').slice(0, 200);
+    const next = String(req.body.new_password || '').slice(0, 200);
+    const confirm = String(req.body.confirm || '').slice(0, 200);
+    const fail = (error) => res.status(400).render('password', { error, done: false });
+    if (next.length < MIN_PASSWORD_LENGTH) return fail(`New password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+    if (next !== confirm) return fail('The two new passwords don\'t match.');
+    if (next === current) return fail('Choose a password different from your current one.');
+    const [found] = await db.asApp((q) => q('SELECT * FROM auth_find_user($1)', [req.user.email]));
+    if (!found || !(await verifyPassword(current, found.password_hash))) return fail('Your current password is wrong.');
+    const hash = await hashPassword(next);
+    await inFirm(req, async (q) => {
+      await q('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.user.user_id]);
+      await audit(q, { ...actor(req), action: 'user.password_changed', entityType: 'user', entityId: req.user.user_id });
+    });
+    res.render('password', { error: null, done: true });
   });
 
   // ----------------------------------------------------------- dashboard
@@ -403,7 +424,7 @@ export function createApp({ db, storage, config }) {
       if (!r || ['accepted', 'waived'].includes(r.status)) return false;
       // Write the file first; if the database insert then fails, the
       // transaction rolls back and the orphan file is harmless.
-      await storage.put(storageKey, req.file.buffer);
+      await storage.put(storageKey, req.file.buffer, type.mime);
       const filename = (req.file.originalname || `upload.${type.ext}`).replace(/[\u0000-\u001f]/g, '').slice(0, 200);
       await q(
         `INSERT INTO documents (id, firm_id, request_id, original_filename, mime_type, size_bytes, sha256, storage_key)

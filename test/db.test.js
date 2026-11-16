@@ -39,7 +39,7 @@ async function rejects(promise, pattern) {
 test('migrations are idempotent', async () => {
   await migrate(db, silent);
   const { rows } = await db.query('SELECT count(*)::int AS n FROM schema_migrations');
-  assert.equal(rows[0].n, 4);
+  assert.equal(rows[0].n, 5);
 });
 
 test('seed copies the 9-item built-in mortgage checklist onto the case', async () => {
