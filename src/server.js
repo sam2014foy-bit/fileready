@@ -39,7 +39,7 @@ if (env.DATABASE_URL) {
     port: Number(env.DATABASE_PORT || 5432),
     database: 'postgres',
     user: `fileready_web.${ref}`, // Supavisor needs <role>.<project ref>
-    password: env.DATABASE_PASSWORD,
+    password: env.DATABASE_PASSWORD.trim(), // ignore stray spaces from copy-paste
   };
 }
 const pool = new pg.Pool({ ...poolConfig, ssl, max: 5, idleTimeoutMillis: 30000 });
