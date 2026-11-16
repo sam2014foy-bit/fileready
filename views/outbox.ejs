@@ -1,0 +1,14 @@
+<%- include('partials/head', { title: 'Outbox (dev)' }) %>
+<main class="outbox">
+  <h1>Emails sent (local only)</h1>
+  <p class="muted">On your computer, emails aren't really sent. They appear here so you can see exactly what clients would get.</p>
+  <% if (!emails.length) { %><p>No emails yet.</p><% } %>
+  <% for (const e of emails) { %>
+    <div class="card">
+      <p class="small muted"><%= new Date(e.sentAt).toLocaleString('en-IE') %> · to <%= e.toName %> &lt;<%= e.to %>&gt; · from <%= e.fromName %><% if (e.replyTo) { %> · replies go to <%= e.replyTo %><% } %></p>
+      <h3><%= e.subject %></h3>
+      <pre><%= e.text %></pre>
+    </div>
+  <% } %>
+</main>
+</body></html>

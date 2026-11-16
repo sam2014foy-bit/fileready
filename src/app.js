@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { audit } from './db.js';
+import { sendCaseReminder, runReminders } from './reminders.js';
 import {
   verifyPassword, burnPasswordCheck, hashPassword, MIN_PASSWORD_LENGTH, randomToken, sha256,
   csrfTokenFor, safeEqual, createLoginLimiter, detectFileType,
@@ -22,8 +23,8 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
  * @param {{put: Function, get: Function}} opts.storage
  * @param {object} opts.config  baseUrl, secureCookies, sessionHours, linkDays
  */
-export function createApp({ db, storage, config }) {
-  const cfg = { sessionHours: 12, linkDays: 14, secureCookies: false, ...config };
+export function createApp({ db, storage, mailer, config }) {
+  const cfg = { sessionHours: 12, linkDays: 14, secureCookies: false, remindersSecret: null, devOutbox: false, ...config };
   const app = express();
   const limiter = createLoginLimiter();
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 5 } });
@@ -42,6 +43,17 @@ export function createApp({ db, storage, config }) {
   }));
   app.use('/static', express.static(path.join(ROOT, 'public'), { maxAge: '1h' }));
   app.get('/healthz', (req, res) => res.type('text').send('ok'));
+
+  // Called by the scheduler (Supabase pg_cron) to send due reminders.
+  app.post('/internal/reminders/run', async (req, res) => {
+    const auth = req.get('authorization') || '';
+    if (!cfg.remindersSecret || !safeEqual(auth, `Bearer ${cfg.remindersSecret}`)) return res.status(401).json({ error: 'unauthorised' });
+    res.json(await runReminders({ db, mailer, baseUrl: cfg.baseUrl }));
+  });
+
+  if (cfg.devOutbox && mailer.outbox) {
+    app.get('/dev/outbox', (req, res) => res.render('outbox', { emails: [...mailer.outbox].reverse() }));
+  }
   app.use(cookieParser());
   app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 
@@ -140,6 +152,7 @@ export function createApp({ db, storage, config }) {
     const cases = await inFirm(req, (q) =>
       q(
         `SELECT c.id, c.title, c.lender, c.status, c.created_at, c.completed_at,
+                c.chasing_started_at, c.next_reminder_at, c.reminders_paused, c.chasing_stopped, c.reminders_sent,
                 cl.first_name, cl.last_name,
                 p.required_total::int, p.required_done::int, p.awaiting_review::int, p.rejected::int
            FROM cases c
@@ -257,15 +270,22 @@ export function createApp({ db, storage, config }) {
           ORDER BY a.created_at DESC LIMIT 50`,
         [caseId]
       );
+      const reminders = await q(
+        `SELECT kind, status, recipient, outstanding, sent_at, created_at, error FROM reminders
+          WHERE case_id = $1 ORDER BY created_at DESC LIMIT 20`,
+        [caseId]
+      );
+      const [firm] = await q('SELECT reminder_every_days, max_reminders FROM firms');
       for (const r of requests) r.documents = documents.filter((d) => d.request_id === r.id);
-      return { kase, requests, links, history };
+      return { kase, requests, links, history, reminders, firm };
     });
   }
 
   app.get('/cases/:id', requireUser, checkId('id'), async (req, res) => {
     const data = await loadCase(req, req.params.id);
     if (!data) return res.status(404).render('error', { message: 'Case not found.' });
-    res.render('case', { ...data, newLink: null });
+    const flash = req.query.sent ? { ok: true, text: 'Email sent to your client.' } : null;
+    res.render('case', { ...data, newLink: null, flash });
   });
 
   const ACTIONS = {
@@ -289,6 +309,14 @@ export function createApp({ db, storage, config }) {
         [act.status, act.status === 'rejected' ? reason : null, req.params.rid, req.params.id, act.from]
       );
       if (!rows.length) return false;
+      if (act.status === 'rejected') {
+        // If we're chasing this client, tell them what to fix within minutes.
+        await q(
+          `UPDATE cases SET next_reminder_at = now() + interval '10 minutes'
+            WHERE id = $1 AND chasing_started_at IS NOT NULL AND NOT reminders_paused`,
+          [req.params.id]
+        );
+      }
       await audit(q, { ...actor(req), action: `request.${act.status}`, entityType: 'document_request', entityId: req.params.rid, details: reason ? { reason } : {} });
       return true;
     });
@@ -314,6 +342,56 @@ export function createApp({ db, storage, config }) {
     res.redirect(`/cases/${req.params.id}`);
   });
 
+  async function caseExists(req) {
+    return inFirm(req, async (q) => (await q('SELECT id FROM cases WHERE id = $1', [req.params.id])).length > 0);
+  }
+
+  async function chaseMessage(req, res, result) {
+    // Redirect after a successful send so refreshing the page can't email the client twice.
+    if (result.status === 'sent') return res.redirect(303, `/cases/${req.params.id}?sent=1`);
+    const data = await loadCase(req, req.params.id);
+    const messages = {
+      sent: 'Email sent to your client.',
+      'client has no email': 'This client has no email address, so nothing was sent. Add one on the client first.',
+      'case not open': 'This case isn\'t open, so nothing was sent.',
+      'nothing outstanding from the client': 'Nothing is outstanding from the client, so nothing was sent.',
+      'busy or not found': 'Another email for this case is being sent right now. Try again in a minute.',
+    };
+    const text = result.status === 'failed' ? `The email couldn't be sent (${result.reason}). It will be retried in 2 hours.` : messages[result.status === 'sent' ? 'sent' : result.reason] || 'Nothing was sent.';
+    res.status(result.status === 'sent' ? 200 : 400).render('case', { ...data, newLink: null, flash: { ok: result.status === 'sent', text } });
+  }
+
+  app.post('/cases/:id/chase/start', requireUser, requireCsrf, checkId('id'), async (req, res) => {
+    if (!(await caseExists(req))) return res.status(404).render('error', { message: 'Case not found.' });
+    const result = await sendCaseReminder({ db, mailer, baseUrl: cfg.baseUrl, firmId: req.user.firm_id, caseId: req.params.id, kind: 'first', force: true, userId: req.user.user_id, linkDays: cfg.linkDays });
+    await chaseMessage(req, res, result);
+  });
+
+  app.post('/cases/:id/chase/now', requireUser, requireCsrf, checkId('id'), async (req, res) => {
+    if (!(await caseExists(req))) return res.status(404).render('error', { message: 'Case not found.' });
+    const result = await sendCaseReminder({ db, mailer, baseUrl: cfg.baseUrl, firmId: req.user.firm_id, caseId: req.params.id, kind: 'manual', force: true, userId: req.user.user_id, linkDays: cfg.linkDays });
+    await chaseMessage(req, res, result);
+  });
+
+  app.post('/cases/:id/chase/:action', requireUser, requireCsrf, checkId('id'), async (req, res) => {
+    const action = req.params.action;
+    if (!['pause', 'resume'].includes(action)) return res.status(404).render('error', { message: 'Not found.' });
+    const ok = await inFirm(req, async (q) => {
+      const rows = action === 'pause'
+        ? await q(`UPDATE cases SET reminders_paused = true WHERE id = $1 AND chasing_started_at IS NOT NULL RETURNING id`, [req.params.id])
+        : await q(
+            `UPDATE cases SET reminders_paused = false, chasing_stopped = NULL, reminders_sent = CASE WHEN chasing_stopped = 'limit_reached' THEN 1 ELSE reminders_sent END,
+                    next_reminder_at = coalesce(least(next_reminder_at, now() + interval '1 day'), now() + interval '1 day')
+              WHERE id = $1 AND chasing_started_at IS NOT NULL AND status = 'open' RETURNING id`,
+            [req.params.id]
+          );
+      if (rows.length) await audit(q, { ...actor(req), action: `chasing.${action === 'pause' ? 'paused' : 'resumed'}`, entityType: 'case', entityId: req.params.id });
+      return rows.length > 0;
+    });
+    if (!ok) return res.status(409).render('error', { message: 'Chasing can\'t be changed on this case right now.' });
+    res.redirect(`/cases/${req.params.id}`);
+  });
+
   app.post('/cases/:id/links', requireUser, requireCsrf, checkId('id'), async (req, res) => {
     const token = randomToken();
     const ok = await inFirm(req, async (q) => {
@@ -330,7 +408,7 @@ export function createApp({ db, storage, config }) {
     if (!ok) return res.status(404).render('error', { message: 'Case not found or closed.' });
     const data = await loadCase(req, req.params.id);
     // The full link is shown once here and never stored.
-    res.render('case', { ...data, newLink: `${cfg.baseUrl}/u/${token}` });
+    res.render('case', { ...data, newLink: `${cfg.baseUrl}/u/${token}`, flash: null });
   });
 
   app.post('/cases/:id/links/:lid/revoke', requireUser, requireCsrf, checkId('id', 'lid'), async (req, res) => {

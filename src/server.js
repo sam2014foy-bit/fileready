@@ -9,12 +9,17 @@
 // Files (Supabase Storage, S3-compatible, storage-only keys):
 //   S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET (documents), S3_REGION (eu-west-1)
 //   S3_ENDPOINT            optional, defaults to https://<ref>.storage.supabase.co/storage/v1/s3
+// Email (Brevo, EU-hosted):
+//   BREVO_API_KEY, SENDER_EMAIL (a sender verified in Brevo)
+// Reminders:
+//   REMINDERS_SECRET       shared with the scheduler that calls /internal/reminders/run
 // Web:
 //   BASE_URL               optional on Render (RENDER_EXTERNAL_URL is used)
 import pg from 'pg';
 import { createApp } from './app.js';
 import { createDb, pgDriver } from './db.js';
 import { localDiskStorage, s3Storage } from './storage.js';
+import { brevoMailer, memoryMailer } from './mailer.js';
 
 const env = process.env;
 const baseUrl = env.BASE_URL || env.RENDER_EXTERNAL_URL;
@@ -61,11 +66,23 @@ if (env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY) {
   storage = localDiskStorage(env.STORAGE_DIR || './storage');
 }
 
+let mailer;
+if (env.BREVO_API_KEY && env.SENDER_EMAIL) {
+  mailer = brevoMailer({ apiKey: env.BREVO_API_KEY.trim(), senderEmail: env.SENDER_EMAIL.trim() });
+} else {
+  console.warn('BREVO_API_KEY / SENDER_EMAIL not set: emails are only written to the log, not sent.');
+  mailer = memoryMailer({ log: true });
+}
+if (!env.REMINDERS_SECRET) console.warn('REMINDERS_SECRET not set: scheduled reminders are switched off.');
+
 // Fail fast if the database login is wrong.
 try {
   const db = createDb(pgDriver(pool));
   await db.asApp((q) => q('SELECT 1'));
-  const app = createApp({ db, storage, config: { baseUrl, secureCookies: baseUrl.startsWith('https://') } });
+  const app = createApp({
+    db, storage, mailer,
+    config: { baseUrl, secureCookies: baseUrl.startsWith('https://'), remindersSecret: env.REMINDERS_SECRET?.trim() || null },
+  });
   const port = Number(env.PORT || 3000);
   app.listen(port, () => console.log(`Fileready listening on ${port} as ${baseUrl}`));
 } catch (err) {

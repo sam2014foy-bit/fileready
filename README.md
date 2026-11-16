@@ -12,7 +12,13 @@ required is in. Built for small Irish brokerages.
 - Hosting: Render (Frankfurt) via `render.yaml`; files in a private Supabase
   Storage bucket in Ireland; app connects as `fileready_web` through the
   Supabase session pooler.
-- Next: email reminders, password reset by email, staff management.
+- Chasing (`src/reminders.js`): broker clicks "Email client & start chasing";
+  reminders every N days (firm setting, default 3), Mon–Sat 9am–7pm Irish time,
+  only for items still missing; rejection triggers a reminder within 10 minutes;
+  stops when complete, paused, or after the firm's limit (default 6). Each email
+  carries a fresh upload link and turns off older ones. Email via Brevo (EU).
+  Scheduled by Supabase pg_cron calling `POST /internal/reminders/run`.
+- Next: password reset by email, staff management, firm settings page.
 
 ## Try it on your computer
 
@@ -24,7 +30,7 @@ npm run dev
 ```
 
 Open http://localhost:3000 and log in with `demo@fileready.test` /
-`demo-password-123`. Data is stored in `.dev-db/` and files in `.dev-storage/`.
+`demo-password-123`. Data is stored in `.dev-db/` and files in `.dev-storage/`. Emails aren't sent locally: read them at http://localhost:3000/dev/outbox.
 Demo data only.
 
 ## Web app (`src/`, `views/`)
@@ -71,7 +77,7 @@ Safety built into the database:
 
 ```bash
 npm install
-npm test                                   # 32 database and app tests, in memory, no server needed
+npm test                                   # 53 tests, in memory, no server needed
 DATABASE_URL=postgres://... npm run db:migrate
 DATABASE_URL=postgres://... npm run db:seed   # demo data only, never on a real database
 ```
@@ -92,7 +98,7 @@ security review.
 ## Live database
 
 Hosted on Supabase, project `xrhzdbvtxrjjupdsgmxl`, region West EU (Ireland),
-Postgres 17. Migrations 0001–0005 applied 16 Nov 2026. Currently on the free plan: upgrade to Pro (backups) before any real client data. Supabase's `anon` and
+Postgres 17. Migrations 0001–0006 applied 16 Nov 2026. Currently on the free plan: upgrade to Pro (backups) before any real client data. Supabase's `anon` and
 `authenticated` API roles have no access to Fileready tables (migration 0002);
 the app must connect server-side as a role granted `fileready_app`.
 

@@ -8,6 +8,8 @@ import { createDb, pgliteDriver } from './db.js';
 import { localDiskStorage } from './storage.js';
 import { migrate } from '../db/migrate.js';
 import { hashPassword } from './security.js';
+import { memoryMailer } from './mailer.js';
+import { runReminders } from './reminders.js';
 
 const PORT = Number(process.env.PORT || 3000);
 const DEMO_EMAIL = 'demo@fileready.test';
@@ -25,12 +27,18 @@ if (rows[0].n === 0) {
   );
 }
 
+const db = createDb(pgliteDriver(pglite));
+const mailer = memoryMailer({ log: true });
+const baseUrl = `http://localhost:${PORT}`;
 const app = createApp({
-  db: createDb(pgliteDriver(pglite)),
+  db, mailer,
   storage: localDiskStorage('./.dev-storage'),
-  config: { baseUrl: `http://localhost:${PORT}` },
+  config: { baseUrl, devOutbox: true },
 });
+// Locally, check for due reminders every minute, at any hour.
+setInterval(() => runReminders({ db, mailer, baseUrl, ignoreHours: true }).catch((e) => console.error(e)), 60_000);
 app.listen(PORT, () => {
   console.log(`\nFileready running at http://localhost:${PORT}`);
-  console.log(`Log in with ${DEMO_EMAIL} / ${DEMO_PASSWORD}\n`);
+  console.log(`Log in with ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
+  console.log(`Emails aren't really sent locally: see them at http://localhost:${PORT}/dev/outbox\n`);
 });

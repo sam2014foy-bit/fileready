@@ -11,6 +11,7 @@ import { createDb, pgliteDriver } from '../src/db.js';
 import { createApp } from '../src/app.js';
 import { localDiskStorage } from '../src/storage.js';
 import { hashPassword } from '../src/security.js';
+import { memoryMailer } from '../src/mailer.js';
 
 const BASE = 'http://fileready.test';
 const PDF = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');
@@ -32,7 +33,7 @@ before(async () => {
   await addFirm('A', 'a@brokers.test');
   await addFirm('B', 'b@brokers.test');
   storageDir = await mkdtemp(path.join(os.tmpdir(), 'fr-'));
-  app = createApp({ db: createDb(pgliteDriver(pglite)), storage: localDiskStorage(storageDir), config: { baseUrl: BASE } });
+  app = createApp({ db: createDb(pgliteDriver(pglite)), storage: localDiskStorage(storageDir), mailer: memoryMailer(), config: { baseUrl: BASE } });
 });
 after(async () => {
   await rm(storageDir, { recursive: true, force: true });

@@ -10,10 +10,58 @@
   <span class="pill big <%= kase.status === 'complete' ? 'good' : '' %>"><%= kase.status === 'complete' ? 'File complete' : kase.status[0].toUpperCase() + kase.status.slice(1) %></span>
 </div>
 
+
+<% if (typeof flash !== 'undefined' && flash) { %><p class="<%= flash.ok ? 'ok' : 'error' %>" role="status"><%= flash.text %></p><% } %>
+
+<section class="card chasing">
+  <% const fmt = (d) => new Date(d).toLocaleString('en-IE', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Europe/Dublin' }); %>
+  <div class="row between">
+    <div>
+      <h2>Chasing</h2>
+      <% if (!kase.chasing_started_at) { %>
+        <p class="muted">Not started. Fileready will email <%= kase.first_name %> the list and a secure upload link, then send a reminder every <%= firm.reminder_every_days %> days (Mon–Sat, 9am–7pm) until everything is in.</p>
+      <% } else if (kase.status !== 'open') { %>
+        <p><strong>Finished.</strong> <span class="muted">No more reminders: the case is <%= kase.status === 'complete' ? 'complete' : kase.status %>.</span></p>
+      <% } else if (kase.chasing_stopped === 'limit_reached') { %>
+        <p><strong class="bad-text">No response after <%= kase.reminders_sent %> emails.</strong> <span class="muted">Reminders have stopped. Time for a phone call, or resume to send more.</span></p>
+      <% } else if (kase.chasing_stopped === 'no_email') { %>
+        <p><strong class="bad-text">Stopped: no email address for this client.</strong></p>
+      <% } else if (kase.reminders_paused) { %>
+        <p><strong>Paused.</strong> <span class="muted"><%= kase.reminders_sent %> email<%= kase.reminders_sent === 1 ? '' : 's' %> sent so far.</span></p>
+      <% } else { %>
+        <p><strong>On.</strong> <%= kase.reminders_sent %> email<%= kase.reminders_sent === 1 ? '' : 's' %> sent.
+          <% if (kase.next_reminder_at) { %>Next reminder: <strong><%= fmt(kase.next_reminder_at) %></strong> <span class="muted">(or the next weekday morning)</span><% } %></p>
+      <% } %>
+      <% if (!kase.client_email) { %><p class="small bad-text">This client has no email address, so Fileready can't chase them by email.</p><% } %>
+    </div>
+    <div class="chase-actions">
+      <% const btn = (path, label, cls) => { %>
+        <form method="post" action="/cases/<%= kase.id %>/chase/<%= path %>"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="<%= cls %>"><%= label %></button></form>
+      <% } %>
+      <% if (kase.status === 'open' && kase.client_email) { %>
+        <% if (!kase.chasing_started_at) { btn('start', 'Email client & start chasing', 'btn'); } else { %>
+          <% btn('now', 'Send reminder now', 'btn small'); %>
+          <% if (kase.reminders_paused || kase.chasing_stopped) { btn('resume', 'Resume reminders', 'link'); } else { btn('pause', 'Pause reminders', 'link'); } %>
+        <% } %>
+      <% } %>
+    </div>
+  </div>
+  <% if (reminders.length) { %>
+  <ul class="plain small sent-list">
+    <% for (const r of reminders) { %>
+      <li><span class="muted"><%= fmt(r.sent_at || r.created_at) %></span>
+        <%= { first: 'First request', reminder: 'Reminder', manual: 'Reminder (sent by you)' }[r.kind] %> to <%= r.recipient %>
+        · <%= r.outstanding %> item<%= r.outstanding === 1 ? '' : 's' %> outstanding
+        <% if (r.status === 'failed') { %><span class="bad-text">· failed, will retry</span><% } else if (r.status === 'scheduled') { %><span class="muted">· sending…</span><% } %></li>
+    <% } %>
+  </ul>
+  <% } %>
+</section>
+
 <% if (newLink) { %>
 <div class="card highlight">
   <h3>Upload link for <%= kase.first_name %></h3>
-  <p>Copy this now and send it to your client. For security it won't be shown again. It works for 14 days.</p>
+  <p>Copy this now and send it to your client yourself. For security it won't be shown again. It works for 14 days, or until Fileready emails them a newer link.</p>
   <input class="copy" readonly value="<%= newLink %>">
 </div>
 <% } %>
@@ -22,7 +70,7 @@
   <div class="row between">
     <h2>Documents</h2>
     <form method="post" action="/cases/<%= kase.id %>/links"><input type="hidden" name="_csrf" value="<%= csrf %>">
-      <button class="btn small"><%= links.length ? 'New upload link' : 'Create upload link' %></button></form>
+      <button class="link small" title="Make a link to send yourself, e.g. by WhatsApp">Copy a link instead</button></form>
   </div>
   <% if (!requests.length) { %><p class="muted">No documents on the checklist yet. Add one below.</p><% } %>
   <ul class="checklist">
