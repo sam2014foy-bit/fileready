@@ -1,8 +1,8 @@
-// File storage. The app only calls put(key, buffer) and get(key).
+// File storage. The app only calls put(key, buffer), get(key) and remove(key).
 // - localDiskStorage: development and tests.
 // - s3Storage: production, pointed at a private Supabase Storage bucket (EU)
 //   through its S3-compatible endpoint, using storage-only access keys.
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 const SAFE_KEY = /^[0-9a-f-]{36}\/[0-9a-f-]{36}$/;
@@ -21,6 +21,9 @@ export function localDiskStorage(rootDir) {
     async get(key) {
       return readFile(path.join(rootDir, checkKey(key)));
     },
+    async remove(key) {
+      await rm(path.join(rootDir, checkKey(key)), { force: true });
+    },
   };
 }
 
@@ -31,7 +34,7 @@ export function localDiskStorage(rootDir) {
  * @param {object} [opts.config]  endpoint, region, accessKeyId, secretAccessKey
  */
 export async function s3Storage({ bucket, client, config }) {
-  const { S3Client, PutObjectCommand, GetObjectCommand } = await import('@aws-sdk/client-s3');
+  const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
   const s3 = client ?? new S3Client({
     forcePathStyle: true,
     region: config.region,
@@ -48,6 +51,9 @@ export async function s3Storage({ bucket, client, config }) {
     async get(key) {
       const res = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: checkKey(key) }));
       return Buffer.from(await res.Body.transformToByteArray());
+    },
+    async remove(key) {
+      await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: checkKey(key) }));
     },
   };
 }

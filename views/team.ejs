@@ -1,0 +1,44 @@
+<%- include('partials/head', { title: 'Team' }) %>
+<%- include('partials/nav') %>
+<div class="page-head"><div><h1>Team</h1><p>People at your firm who can log in to Fileready.</p></div></div>
+<% if (flash) { %><p class="notice <%= flash.ok ? 'ok' : 'error' %>" role="status"><%= flash.text %></p><% } %>
+<section class="surface">
+<table class="ledger">
+  <thead><tr><th>Name</th><th>Role</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  <% for (const t of team) { const me = t.id === user.user_id; %>
+    <tr>
+      <td class="client-cell"><span style="font:500 18px/1.25 var(--serif)"><%= t.full_name %></span><span class="sub"><%= t.email %></span></td>
+      <td><%= { owner: 'Owner', adviser: 'Adviser', admin_staff: 'Admin staff' }[t.role] %></td>
+      <td><% if (t.disabled_at) { %><span class="chip">No access</span><% } else if (!t.has_password) { %><span class="chip warn">Invited</span><% } else { %><span class="chip good">Active</span><% } %>
+        <% if (t.last_login_at) { %><span class="sub small muted" style="display:block;margin-top:4px">Last in <%= new Date(t.last_login_at).toLocaleDateString('en-IE') %></span><% } %></td>
+      <td style="text-align:right">
+        <% if (!me) { %><div class="actions" style="display:inline-flex;gap:16px">
+          <% if (!t.disabled_at && !t.has_password) { %><form method="post" action="/team/<%= t.id %>/resend"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link">Resend invitation</button></form><% } %>
+          <% if (t.disabled_at) { %><form method="post" action="/team/<%= t.id %>/enable"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link">Give access</button></form>
+          <% } else { %><form method="post" action="/team/<%= t.id %>/disable"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link danger">Remove access</button></form><% } %>
+        </div><% } else { %><span class="muted small">You</span><% } %>
+      </td>
+    </tr>
+  <% } %>
+  </tbody>
+</table>
+</section>
+<form method="post" action="/team" class="surface form-surface" style="margin-top:20px">
+  <h2 style="margin-bottom:6px">Invite someone</h2>
+  <p class="muted small" style="margin:0 0 20px">They'll get an email with a link to set their password.</p>
+  <% if (error) { %><p class="notice error" role="alert"><%= error %></p><% } %>
+  <input type="hidden" name="_csrf" value="<%= csrf %>">
+  <div class="two">
+    <label>Name <input name="full_name" value="<%= values.full_name || '' %>" required></label>
+    <label>Email <input type="email" name="email" value="<%= values.email || '' %>" required></label>
+  </div>
+  <label>Role
+    <select name="role">
+      <option value="adviser" <%= values.role !== 'admin_staff' ? 'selected' : '' %>>Adviser: works on cases</option>
+      <option value="admin_staff" <%= values.role === 'admin_staff' ? 'selected' : '' %>>Admin staff: helps with cases</option>
+    </select>
+  </label>
+  <button class="btn">Send invitation</button>
+</form>
+<%- include('partials/foot') %>

@@ -1,0 +1,19 @@
+<%- include('partials/head', { title: 'Reset your password' }) %>
+<main class="plain-page">
+  <a class="wordmark" href="/login"><%- include('partials/mark') %><span>Fileready</span></a>
+  <% if (sent) { %>
+    <h1>Check your email</h1>
+    <p>If that address has a Fileready login, we've sent it a link to set a new password. The link works for 1 hour.</p>
+    <p><a href="/login">Back to log in</a></p>
+  <% } else { %>
+    <h1>Reset your password</h1>
+    <p>Enter the email you log in with and we'll send you a link to set a new password.</p>
+    <% if (error) { %><p class="notice error" role="alert"><%= error %></p><% } %>
+    <form method="post" action="/forgot" style="margin-top:24px">
+      <label>Email <input type="email" name="email" autocomplete="username" required autofocus></label>
+      <button class="btn wide">Send reset link</button>
+    </form>
+    <p class="small" style="margin-top:20px"><a href="/login">Back to log in</a></p>
+  <% } %>
+</main>
+</body></html>

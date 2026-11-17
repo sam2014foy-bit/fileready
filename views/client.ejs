@@ -1,0 +1,66 @@
+<%- include('partials/head', { title: client.first_name + ' ' + client.last_name }) %>
+<%- include('partials/nav') %>
+<a class="back" href="/clients">← Clients</a>
+<div class="page-head">
+  <div>
+    <h1><%= client.first_name %> <%= client.last_name %></h1>
+    <p><%= cases.length %> <%= cases.length === 1 ? 'case' : 'cases' %><% if (client.archived_at) { %>. Archived <%= new Date(client.archived_at).toLocaleDateString('en-IE') %>.<% } %></p>
+  </div>
+  <% if (!client.archived_at) { %><a class="btn" href="/cases/new?client=<%= client.id %>">New case</a><% } %>
+</div>
+<% if (flash) { %><p class="notice <%= flash.ok ? 'ok' : 'error' %>" role="status"><%= flash.text %></p><% } %>
+
+<section class="surface">
+  <div class="surface-head"><h2>Cases</h2></div>
+  <% if (!cases.length) { %><p class="surface-body muted" style="margin:0">No cases yet.</p><% } else { %>
+  <table class="ledger" style="margin-top:8px">
+    <tbody>
+    <% for (const c of cases) { const pct = c.required_total ? Math.round(100 * c.required_done / c.required_total) : 0; %>
+      <tr>
+        <td class="client-cell"><a href="/cases/<%= c.id %>"><%= c.title %></a><span class="sub"><%= c.lender || 'No lender yet' %>, opened <%= new Date(c.created_at).toLocaleDateString('en-IE') %></span></td>
+        <td><div class="meter"><span class="track"><span class="fill" style="width:<%= pct %>%"></span></span><span class="frac"><%= c.required_done %>/<%= c.required_total %></span></div></td>
+        <td><% if (c.status === 'complete') { %><span class="chip brass">File complete</span><% } else { %><span class="chip"><%= c.status[0].toUpperCase() + c.status.slice(1).replace('_', ' ') %></span><% } %></td>
+      </tr>
+    <% } %>
+    </tbody>
+  </table>
+  <% } %>
+</section>
+
+<div class="two-col">
+  <form method="post" action="/clients/<%= client.id %>" class="surface">
+    <div class="surface-head"><h2>Details</h2></div>
+    <div class="surface-body">
+      <% if (error) { %><p class="notice error" role="alert"><%= error %></p><% } %>
+      <input type="hidden" name="_csrf" value="<%= csrf %>">
+      <div class="two">
+        <label>First name <input name="first_name" value="<%= values.first_name || '' %>" required></label>
+        <label>Last name <input name="last_name" value="<%= values.last_name || '' %>" required></label>
+      </div>
+      <label>Email <input type="email" name="email" value="<%= values.email || '' %>"></label>
+      <label>Mobile <input type="tel" name="phone" value="<%= values.phone || '' %>"></label>
+      <button class="btn">Save details</button>
+    </div>
+  </form>
+  <section class="surface">
+    <div class="surface-head"><h2>Archive or delete</h2></div>
+    <div class="surface-body">
+      <% if (client.archived_at) { %>
+        <p class="muted small" style="margin:0 0 12px">This client is archived and hidden from your client list.</p>
+        <form method="post" action="/clients/<%= client.id %>/unarchive"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn quiet small">Restore client</button></form>
+      <% } else { %>
+        <p class="muted small" style="margin:0 0 12px">Archiving hides the client from your list and keeps their records.</p>
+        <form method="post" action="/clients/<%= client.id %>/archive"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn quiet small">Archive client</button></form>
+      <% } %>
+      <% if (user.role === 'owner') { %>
+      <form method="post" action="/clients/<%= client.id %>/delete" class="danger-zone">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <p class="small" style="margin:0 0 10px">Deleting removes the client, every case and every uploaded file for good, for example when they ask you to erase their data.</p>
+        <label class="inline small"><input type="checkbox" name="confirm" value="yes" required> I understand this can't be undone</label>
+        <button class="btn danger small">Delete client and documents</button>
+      </form>
+      <% } %>
+    </div>
+  </section>
+</div>
+<%- include('partials/foot') %>

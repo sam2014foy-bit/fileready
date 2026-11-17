@@ -4,6 +4,10 @@
     <nav aria-label="Main">
       <a href="/" <%- (path === '/' || path.startsWith('/cases')) ? 'aria-current="page"' : '' %>>Cases</a>
       <a href="/clients" <%- path.startsWith('/clients') && path !== '/clients/new' ? 'aria-current="page"' : '' %>>Clients</a>
+      <% if (user.role === 'owner') { %>
+      <a href="/team" <%- path.startsWith('/team') ? 'aria-current="page"' : '' %>>Team</a>
+      <a href="/settings" <%- path.startsWith('/settings') ? 'aria-current="page"' : '' %>>Settings</a>
+      <% } %>
     </nav>
     <div class="new"><a class="btn-new" href="/clients/new">+ New client</a></div>
     <div class="who">

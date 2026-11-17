@@ -18,7 +18,15 @@ required is in. Built for small Irish brokerages.
   stops when complete, paused, or after the firm's limit (default 6). Each email
   carries a fresh upload link and turns off older ones. Email via Brevo (EU).
   Scheduled by Supabase pg_cron calling `POST /internal/reminders/run` (setup in `db/supabase-scheduler.sql`). Live app: https://fileready-kgk1.onrender.com
-- Next: password reset by email, staff management, firm settings page.
+- Accounts: forgot-password email reset (1-hour link), staff invites from the
+  Team page (7-day link), firm Settings (name, reminder gap, reminder limit).
+  Changing or resetting a password signs out other sessions; removing a
+  person's access signs them out at once.
+- Records: client page (edit, archive, delete with all files), case close /
+  hold / reopen / delete, remove a wrong upload, remove a checklist item.
+  Permanent deletes are owner-only and need a confirm tick.
+- Adviser gets an email when a client uploads (at most every 30 minutes per case).
+- Next: automatic deletion after the retention period, text reminders.
 
 ## Try it on your computer
 
@@ -77,7 +85,7 @@ Safety built into the database:
 
 ```bash
 npm install
-npm test                                   # 53 tests, in memory, no server needed
+npm test                                   # 76 tests, in memory, no server needed
 DATABASE_URL=postgres://... npm run db:migrate
 DATABASE_URL=postgres://... npm run db:seed   # demo data only, never on a real database
 ```
@@ -98,7 +106,7 @@ security review.
 ## Live database
 
 Hosted on Supabase, project `xrhzdbvtxrjjupdsgmxl`, region West EU (Ireland),
-Postgres 17. Migrations 0001–0006 applied 16 Nov 2026. Currently on the free plan: upgrade to Pro (backups) before any real client data. Supabase's `anon` and
+Postgres 17. Migrations 0001–0007 applied 16 Nov 2026. Currently on the free plan: upgrade to Pro (backups) before any real client data. Supabase's `anon` and
 `authenticated` API roles have no access to Fileready tables (migration 0002);
 the app must connect server-side as a role granted `fileready_app`.
 

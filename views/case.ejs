@@ -13,7 +13,7 @@
 
 <header class="case-head">
   <div>
-    <h1><%= kase.first_name %> <%= kase.last_name %></h1>
+    <h1><a href="/clients/<%= kase.client_id %>" class="title-link"><%= kase.first_name %> <%= kase.last_name %></a></h1>
     <div class="case-meta">
       <span><%= kase.title %><% if (kase.lender) { %>, <%= kase.lender %><% } %></span>
       <% if (kase.client_email) { %><span><%= kase.client_email %></span><% } %>
@@ -40,7 +40,7 @@
       <% if (!kase.chasing_started_at) { %>
         <p class="status-line muted">Not started. Fileready will email <%= kase.first_name %> the list and a secure upload link, then remind them every <%= firm.reminder_every_days %> days, Monday to Saturday between 9am and 7pm, until everything is in.</p>
       <% } else if (kase.status !== 'open') { %>
-        <p class="status-line"><strong>Finished.</strong> <span class="muted">No more reminders: the case is <%= kase.status === 'complete' ? 'complete' : kase.status %>.</span></p>
+        <p class="status-line"><strong>Finished.</strong> <span class="muted">No more reminders: the case is <%= kase.status === 'complete' ? 'complete' : kase.status.replace('_', ' ') %>.</span></p>
       <% } else if (kase.chasing_stopped === 'limit_reached') { %>
         <p class="status-line"><strong class="bad-text">No response after <%= kase.reminders_sent %> emails.</strong> <span class="muted">Reminders have stopped. Time for a phone call, or resume to send more.</span></p>
       <% } else if (kase.chasing_stopped === 'no_email') { %>
@@ -103,7 +103,8 @@
         <% for (const d of r.documents) { %>
           <div class="file"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5h5l3 3v8H3z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
             <a href="/documents/<%= d.id %>"><%= d.original_filename %></a>
-            <span class="muted num"><%= d.size_bytes < 1048576 ? Math.max(1, Math.round(d.size_bytes / 1024)) + ' KB' : (d.size_bytes / 1048576).toFixed(1) + ' MB' %>, <%= new Date(d.uploaded_at).toLocaleString('en-IE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Dublin' }) %></span></div>
+            <span class="muted num"><%= d.size_bytes < 1048576 ? Math.max(1, Math.round(d.size_bytes / 1024)) + ' KB' : (d.size_bytes / 1048576).toFixed(1) + ' MB' %>, <%= new Date(d.uploaded_at).toLocaleString('en-IE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Dublin' }) %></span>
+            <form method="post" action="/documents/<%= d.id %>/remove" class="inline-form"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link danger" title="Delete this file, e.g. if the client uploaded the wrong one">Remove</button></form></div>
         <% } %>
       </div>
       <div class="item-side">
@@ -115,6 +116,7 @@
           <% if (r.status === 'received') { act('accept', 'Accept'); } %>
           <% if (['requested','received','rejected'].includes(r.status)) { act('waive', 'Not needed'); } %>
           <% if (['accepted','waived'].includes(r.status)) { act('reopen', 'Reopen'); } %>
+          <% if (!r.documents.length) { %><form method="post" action="/cases/<%= kase.id %>/requests/<%= r.id %>/delete"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link quiet" title="Take this item off the checklist">Remove</button></form><% } %>
         </div>
         <% if (['received','accepted'].includes(r.status)) { %>
           <form method="post" action="/cases/<%= kase.id %>/requests/<%= r.id %>" class="reject">
@@ -161,4 +163,25 @@
     </div>
   </section>
 </div>
+<section class="surface" style="margin-top:20px">
+  <div class="surface-head"><h2>Case</h2></div>
+  <div class="surface-body case-actions">
+    <p class="muted small" style="margin:0 0 14px">
+      <% if (kase.status === 'closed') { %>Closed <%= kase.closed_at ? new Date(kase.closed_at).toLocaleDateString('en-IE') : '' %>. Reopen it to collect more documents.
+      <% } else if (kase.status === 'on_hold') { %>On hold. No reminders go out until you reopen it.
+      <% } else { %>Close the case once the mortgage is drawn down, or put it on hold to pause everything.<% } %>
+    </p>
+    <div class="row-actions">
+      <% const st = (a, label, cls) => { %><form method="post" action="/cases/<%= kase.id %>/status"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="action" value="<%= a %>"><button class="<%= cls %>"><%= label %></button></form><% } %>
+      <% if (['open', 'complete'].includes(kase.status)) { st('close', 'Close case', 'btn quiet small'); st('hold', 'Put on hold', 'btn quiet small'); } else { st('reopen', 'Reopen case', 'btn quiet small'); } %>
+    </div>
+    <% if (user.role === 'owner') { %>
+    <form method="post" action="/cases/<%= kase.id %>/delete" class="danger-zone">
+      <input type="hidden" name="_csrf" value="<%= csrf %>">
+      <label class="inline small"><input type="checkbox" name="confirm" value="yes" required> Delete this case and all its files for good</label>
+      <button class="btn danger small">Delete case</button>
+    </form>
+    <% } %>
+  </div>
+</section>
 <%- include('partials/foot') %>

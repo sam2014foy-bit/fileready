@@ -1,0 +1,17 @@
+<%- include('partials/head', { title: 'Settings' }) %>
+<%- include('partials/nav') %>
+<form method="post" action="/settings" class="surface form-surface">
+  <h1>Settings</h1>
+  <% if (flash) { %><p class="notice ok" role="status"><%= flash.text %></p><% } %>
+  <% if (error) { %><p class="notice error" role="alert"><%= error %></p><% } %>
+  <input type="hidden" name="_csrf" value="<%= csrf %>">
+  <label>Firm name <input name="name" value="<%= values.name %>" required></label>
+  <p class="hint">Clients see this on their upload page and in reminder emails.</p>
+  <div class="two">
+    <label>Days between reminders <input type="number" name="reminder_every_days" min="1" max="30" value="<%= values.reminder_every_days %>" required></label>
+    <label>Most emails per case <input type="number" name="max_reminders" min="1" max="20" value="<%= values.max_reminders %>" required></label>
+  </div>
+  <p class="hint">After the most emails per case, Fileready stops and flags the case so you can phone the client.</p>
+  <button class="btn">Save settings</button>
+</form>
+<%- include('partials/foot') %>

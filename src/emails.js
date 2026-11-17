@@ -78,3 +78,43 @@ export function reminderEmail({ kind, firstName, firmName, caseTitle, adviserNam
 
   return { subject, text, html, outstanding: n };
 }
+
+
+// Shared frame for Fileready's own emails to staff.
+function frame(heading, bodyHtml, footer) {
+  return `<!doctype html><html><body style="margin:0;background:#F3F4F1;padding:24px 12px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border:1px solid #E3E7E4;border-radius:14px">
+<tr><td style="padding:22px 28px;border-bottom:1px solid #E3E7E4;font:500 18px Georgia,'Times New Roman',serif;color:#14222B">Fileready</td></tr>
+<tr><td style="padding:28px;font:15px/1.6 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#14222B">
+<h1 style="margin:0 0 16px;font:500 24px/1.25 Georgia,'Times New Roman',serif">${esc(heading)}</h1>${bodyHtml}</td></tr>
+<tr><td style="padding:16px 28px;border-top:1px solid #E3E7E4;font:12px/1.5 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#5E6B70">${esc(footer)}</td></tr>
+</table></td></tr></table></body></html>`;
+}
+const button = (link, label) => `<p style="margin:24px 0"><a href="${esc(link)}" style="background:#0F3A44;color:#FFFFFF;padding:13px 22px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">${esc(label)}</a></p>`;
+
+export function accountEmail({ purpose, name, firmName, inviter, link }) {
+  if (purpose === 'invite') {
+    const intro = `${inviter} has added you to ${firmName} on Fileready, where you'll track clients' mortgage documents.`;
+    return {
+      subject: `You're invited to ${firmName} on Fileready`,
+      text: `Hi ${name},\n\n${intro}\n\nSet your password here: ${link}\n\nThis link works for 7 days.`,
+      html: frame('Set up your login', `<p style="margin:0 0 12px">Hi ${esc(name)},</p><p style="margin:0">${esc(intro)}</p>${button(link, 'Set your password')}<p style="margin:0;color:#5E6B70;font-size:14px">This link works for 7 days.</p>`, 'If you weren\'t expecting this, you can ignore it.'),
+    };
+  }
+  return {
+    subject: 'Reset your Fileready password',
+    text: `Hi ${name},\n\nSomeone asked to reset the password for your ${firmName} login on Fileready. If it was you, set a new one here: ${link}\n\nThis link works for 1 hour. If it wasn't you, ignore this email and your password stays the same.`,
+    html: frame('Reset your password', `<p style="margin:0 0 12px">Hi ${esc(name)},</p><p style="margin:0">Someone asked to reset the password for your ${esc(firmName)} login. If it was you, set a new one below.</p>${button(link, 'Set a new password')}<p style="margin:0;color:#5E6B70;font-size:14px">This link works for 1 hour.</p>`, 'If you didn\'t ask for this, ignore this email and your password stays the same.'),
+  };
+}
+
+export function uploadAlertEmail({ adviserName, clientName, items, link }) {
+  const list = items.length ? items : ['A document'];
+  const subject = `${clientName} uploaded ${list.length === 1 ? list[0] : `${list.length} documents`}`;
+  return {
+    subject,
+    text: `Hi ${adviserName},\n\n${clientName} has uploaded documents waiting for your review:\n${list.map((l) => `• ${l}`).join('\n')}\n\nReview them: ${link}`,
+    html: frame('Documents to review', `<p style="margin:0 0 12px">Hi ${esc(adviserName)},</p><p style="margin:0 0 12px">${esc(clientName)} has uploaded documents waiting for your review:</p><ul style="margin:0;padding-left:20px">${list.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>${button(link, 'Review documents')}`, 'You get at most one of these every 30 minutes per case.'),
+  };
+}

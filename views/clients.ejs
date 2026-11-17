@@ -1,20 +1,30 @@
 <%- include('partials/head', { title: 'Clients' }) %>
 <%- include('partials/nav') %>
 <div class="page-head">
-  <div><h1>Clients</h1><p><%= clients.length %> <%= clients.length === 1 ? 'client' : 'clients' %></p></div>
-  <a class="btn" href="/clients/new">Add a client</a>
+  <div><h1>Clients</h1><p><%= clients.length %> <%= archived ? 'archived' : '' %> <%= clients.length === 1 ? 'client' : 'clients' %></p></div>
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <nav class="segments" aria-label="Filter clients">
+      <a href="/clients" <%- !archived ? 'aria-current="page"' : '' %>>Active</a>
+      <a href="/clients?show=archived" <%- archived ? 'aria-current="page"' : '' %>>Archived</a>
+    </nav>
+    <a class="btn" href="/clients/new">Add a client</a>
+  </div>
 </div>
+<% if (flash) { %><p class="notice <%= flash.ok ? 'ok' : 'error' %>" role="status"><%= flash.text %></p><% } %>
 <% if (!clients.length) { %>
-  <div class="surface empty"><h2>No clients yet</h2><p>Add your first client to start collecting their documents.</p><a class="btn" href="/clients/new">Add a client</a></div>
+  <div class="surface empty">
+    <% if (archived) { %><h2>No archived clients</h2><p>Clients you archive appear here.</p>
+    <% } else { %><h2>No clients yet</h2><p>Add your first client to start collecting their documents.</p><a class="btn" href="/clients/new">Add a client</a><% } %>
+  </div>
 <% } else { %>
 <div class="surface">
 <table class="ledger">
-  <thead><tr><th>Name</th><th>Email</th><th>Mobile</th><th>Cases</th><th></th></tr></thead>
+  <thead><tr><th>Name</th><th>Email</th><th>Mobile</th><th>Cases</th></tr></thead>
   <tbody>
   <% for (const c of clients) { %>
-    <tr><td class="client-cell"><a href="/cases/new?client=<%= c.id %>"><%= c.first_name %> <%= c.last_name %></a></td>
+    <tr><td class="client-cell"><a href="/clients/<%= c.id %>"><%= c.first_name %> <%= c.last_name %></a></td>
         <td><%= c.email || '' %></td><td class="num"><%= c.phone || '' %></td>
-        <td class="num"><%= c.case_count %></td><td><a href="/cases/new?client=<%= c.id %>">New case</a></td></tr>
+        <td class="num"><%= c.case_count %></td></tr>
   <% } %>
   </tbody>
 </table>

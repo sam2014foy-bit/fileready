@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { audit } from './db.js';
 import { sendCaseReminder, runReminders } from './reminders.js';
+import { accountEmail, uploadAlertEmail } from './emails.js';
 import {
   verifyPassword, burnPasswordCheck, hashPassword, MIN_PASSWORD_LENGTH, randomToken, sha256,
   csrfTokenFor, safeEqual, createLoginLimiter, detectFileType,
@@ -92,13 +93,15 @@ export function createApp({ db, storage, mailer, config }) {
   const actor = (req) => ({ firmId: req.user.firm_id, actorType: 'user', userId: req.user.user_id, ip: req.ip });
 
   // ---------------------------------------------------------------- auth
-  app.get('/login', (req, res) => (req.user ? res.redirect('/') : res.render('login', { error: null, email: '' })));
+  app.get('/login', (req, res) => (req.user ? res.redirect('/') : res.render('login', {
+    error: null, email: '', notice: req.query.reset ? 'Your password is set. Log in with it now.' : null,
+  })));
 
   app.post('/login', async (req, res) => {
     const email = String(req.body.email || '').trim().toLowerCase().slice(0, 200);
     const password = String(req.body.password || '').slice(0, 200);
     const key = `${req.ip}|${email}`;
-    const fail = (status = 401, error = 'Email or password is wrong.') => res.status(status).render('login', { error, email });
+    const fail = (status = 401, error = 'Email or password is wrong.') => res.status(status).render('login', { error, email, notice: null });
 
     if (limiter.blocked(key)) return fail(429, 'Too many attempts. Wait 15 minutes and try again.');
     const [found] = await db.asApp((q) => q('SELECT * FROM auth_find_user($1)', [email]));
@@ -144,6 +147,7 @@ export function createApp({ db, storage, mailer, config }) {
       await q('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.user.user_id]);
       await audit(q, { ...actor(req), action: 'user.password_changed', entityType: 'user', entityId: req.user.user_id });
     });
+    await db.asApp((q) => q('SELECT session_revoke_others($1)', [sha256(req.sessionToken)]));
     res.render('password', { error: null, done: true });
   });
 
@@ -177,11 +181,14 @@ export function createApp({ db, storage, mailer, config }) {
 
   // ------------------------------------------------------------- clients
   app.get('/clients', requireUser, async (req, res) => {
+    const archived = req.query.show === 'archived';
     const clients = await inFirm(req, (q) =>
       q(`SELECT c.*, (SELECT count(*)::int FROM cases k WHERE k.client_id = c.id) AS case_count
-           FROM clients c WHERE archived_at IS NULL ORDER BY last_name, first_name LIMIT 500`)
+           FROM clients c WHERE (archived_at IS NOT NULL) = $1 ORDER BY last_name, first_name LIMIT 500`, [archived])
     );
-    res.render('clients', { clients });
+    const flash = req.query.deleted ? { ok: true, text: 'Client and all their documents deleted.' }
+      : req.query.archived ? { ok: true, text: 'Client archived. Find them under Archived.' } : null;
+    res.render('clients', { clients, archived, flash });
   });
 
   app.get('/clients/new', requireUser, (req, res) => res.render('client_new', { error: null, values: {} }));
@@ -325,6 +332,7 @@ export function createApp({ db, storage, mailer, config }) {
           [req.params.id]
         );
       }
+      await resumeChasingIfNeeded(q, req.params.id);
       await audit(q, { ...actor(req), action: `request.${act.status}`, entityType: 'document_request', entityId: req.params.rid, details: reason ? { reason } : {} });
       return true;
     });
@@ -343,6 +351,7 @@ export function createApp({ db, storage, mailer, config }) {
          VALUES ($1, $2, $3, $4, $5, (SELECT coalesce(max(sort_order), 0) + 1 FROM document_requests WHERE case_id = $2)) RETURNING id`,
         [req.user.firm_id, req.params.id, label, clean(req.body.help_text, 300) || null, req.body.required === 'on']
       );
+      await resumeChasingIfNeeded(q, req.params.id);
       await audit(q, { ...actor(req), action: 'request.added', entityType: 'document_request', entityId: r.id, details: { label } });
       return true;
     });
@@ -450,6 +459,338 @@ export function createApp({ db, storage, mailer, config }) {
     res.send(body);
   });
 
+  // ------------------------------------------------- shared helpers (staff)
+  const requireOwner = (req, res, next) =>
+    req.user?.role === 'owner' ? next() : res.status(403).render('error', { message: 'Only the firm owner can do that.' });
+
+  async function purgeFiles(keys) {
+    for (const key of keys) {
+      try { await storage.remove(key); } catch (err) { console.error('File purge failed', key, err.message); }
+    }
+  }
+
+  // If chasing was on and a change left the case open with no reminder scheduled, schedule one.
+  async function resumeChasingIfNeeded(q, caseId) {
+    await q(
+      `UPDATE cases SET next_reminder_at = now() + interval '1 day'
+        WHERE id = $1 AND status = 'open' AND chasing_started_at IS NOT NULL AND NOT reminders_paused
+          AND chasing_stopped IS NULL AND next_reminder_at IS NULL`,
+      [caseId]
+    );
+  }
+
+  function clientFields(body) {
+    const v = {
+      first_name: clean(body.first_name, 100),
+      last_name: clean(body.last_name, 100),
+      email: clean(body.email, 200).toLowerCase() || null,
+      phone: clean(body.phone, 40) || null,
+    };
+    let error = null;
+    if (!v.first_name || !v.last_name) error = 'First and last name are needed.';
+    else if (!v.email && !v.phone) error = 'Add an email or phone number so reminders can reach them.';
+    else if (v.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email)) error = 'That email address doesn\'t look right.';
+    return { v, error };
+  }
+
+  // ------------------------------------------------------------ client page
+  async function loadClient(req, id) {
+    return inFirm(req, async (q) => {
+      const [client] = await q('SELECT * FROM clients WHERE id = $1', [id]);
+      if (!client) return null;
+      const cases = await q(
+        `SELECT c.id, c.title, c.lender, c.status, c.created_at, p.required_total::int, p.required_done::int
+           FROM cases c JOIN case_progress p ON p.case_id = c.id WHERE c.client_id = $1 ORDER BY c.created_at DESC`,
+        [id]
+      );
+      return { client, cases };
+    });
+  }
+
+  app.get('/clients/:id', requireUser, checkId('id'), async (req, res) => {
+    const data = await loadClient(req, req.params.id);
+    if (!data) return res.status(404).render('error', { message: 'Client not found.' });
+    const flash = req.query.saved ? { ok: true, text: 'Client details saved.' } : null;
+    res.render('client', { ...data, values: data.client, error: null, flash });
+  });
+
+  app.post('/clients/:id', requireUser, requireCsrf, checkId('id'), async (req, res) => {
+    const { v, error } = clientFields(req.body);
+    if (error) {
+      const data = await loadClient(req, req.params.id);
+      if (!data) return res.status(404).render('error', { message: 'Client not found.' });
+      return res.status(400).render('client', { ...data, values: { ...data.client, ...v }, error, flash: null });
+    }
+    const ok = await inFirm(req, async (q) => {
+      const rows = await q(
+        `UPDATE clients SET first_name = $2, last_name = $3, email = $4, phone = $5 WHERE id = $1 RETURNING id`,
+        [req.params.id, v.first_name, v.last_name, v.email, v.phone]
+      );
+      if (!rows.length) return false;
+      // A new email address means chasing can start again where it had stopped for want of one.
+      if (v.email) {
+        await q(
+          `UPDATE cases SET chasing_stopped = NULL, next_reminder_at = coalesce(next_reminder_at, now() + interval '1 hour')
+            WHERE client_id = $1 AND chasing_stopped = 'no_email' AND status = 'open'`,
+          [req.params.id]
+        );
+      }
+      await audit(q, { ...actor(req), action: 'client.updated', entityType: 'client', entityId: req.params.id });
+      return true;
+    });
+    if (!ok) return res.status(404).render('error', { message: 'Client not found.' });
+    res.redirect(303, `/clients/${req.params.id}?saved=1`);
+  });
+
+  app.post('/clients/:id/:action', requireUser, requireCsrf, checkId('id'), async (req, res, next) => {
+    if (!['archive', 'unarchive'].includes(req.params.action)) return next();
+    const archive = req.params.action === 'archive';
+    const ok = await inFirm(req, async (q) => {
+      const rows = await q(`UPDATE clients SET archived_at = ${archive ? 'now()' : 'NULL'} WHERE id = $1 RETURNING id`, [req.params.id]);
+      if (rows.length) await audit(q, { ...actor(req), action: `client.${archive ? 'archived' : 'unarchived'}`, entityType: 'client', entityId: req.params.id });
+      return rows.length > 0;
+    });
+    if (!ok) return res.status(404).render('error', { message: 'Client not found.' });
+    res.redirect(303, archive ? '/clients?archived=1' : `/clients/${req.params.id}`);
+  });
+
+  app.post('/clients/:id/delete', requireUser, requireCsrf, requireOwner, checkId('id'), async (req, res) => {
+    if (req.body.confirm !== 'yes') return res.status(400).render('error', { message: 'Tick the box to confirm you want to delete this client and all their documents.' });
+    const keys = await inFirm(req, async (q) => {
+      const docs = await q(
+        `SELECT d.storage_key FROM documents d JOIN document_requests r ON r.id = d.request_id
+           JOIN cases c ON c.id = r.case_id WHERE c.client_id = $1`,
+        [req.params.id]
+      );
+      const rows = await q('DELETE FROM clients WHERE id = $1 RETURNING id', [req.params.id]);
+      if (!rows.length) return null;
+      await audit(q, { ...actor(req), action: 'client.deleted', entityType: 'client', entityId: req.params.id, details: { files: docs.length } });
+      return docs.map((d) => d.storage_key);
+    });
+    if (!keys) return res.status(404).render('error', { message: 'Client not found.' });
+    await purgeFiles(keys);
+    res.redirect(303, '/clients?deleted=1');
+  });
+
+  // ------------------------------------------------------------ case status
+  app.post('/cases/:id/status', requireUser, requireCsrf, checkId('id'), async (req, res) => {
+    const action = req.body.action;
+    if (!['close', 'hold', 'reopen'].includes(action)) return res.status(400).render('error', { message: 'Unknown action.' });
+    const ok = await inFirm(req, async (q) => {
+      let rows;
+      if (action === 'close') {
+        rows = await q(`UPDATE cases SET status = 'closed', closed_at = now(), next_reminder_at = NULL WHERE id = $1 AND status <> 'closed' RETURNING id`, [req.params.id]);
+      } else if (action === 'hold') {
+        rows = await q(`UPDATE cases SET status = 'on_hold', next_reminder_at = NULL WHERE id = $1 AND status IN ('open', 'complete') RETURNING id`, [req.params.id]);
+      } else {
+        rows = await q(
+          `UPDATE cases c SET closed_at = NULL,
+                  status = CASE WHEN p.required_total > 0 AND p.required_done = p.required_total THEN 'complete'::case_status ELSE 'open'::case_status END
+             FROM case_progress p
+            WHERE c.id = $1 AND p.case_id = c.id AND c.status IN ('closed', 'on_hold') RETURNING c.id`,
+          [req.params.id]
+        );
+        if (rows.length) await resumeChasingIfNeeded(q, req.params.id);
+      }
+      if (rows.length) await audit(q, { ...actor(req), action: `case.${{ close: 'closed', hold: 'put_on_hold', reopen: 'reopened' }[action]}`, entityType: 'case', entityId: req.params.id });
+      return rows.length > 0;
+    });
+    if (!ok) return res.status(409).render('error', { message: 'That case can\'t be changed that way right now. Reload it and try again.' });
+    res.redirect(303, `/cases/${req.params.id}`);
+  });
+
+  app.post('/cases/:id/delete', requireUser, requireCsrf, requireOwner, checkId('id'), async (req, res) => {
+    if (req.body.confirm !== 'yes') return res.status(400).render('error', { message: 'Tick the box to confirm you want to delete this case and its documents.' });
+    const result = await inFirm(req, async (q) => {
+      const [k] = await q('SELECT client_id FROM cases WHERE id = $1', [req.params.id]);
+      if (!k) return null;
+      const docs = await q(
+        `SELECT d.storage_key FROM documents d JOIN document_requests r ON r.id = d.request_id WHERE r.case_id = $1`,
+        [req.params.id]
+      );
+      await q('DELETE FROM cases WHERE id = $1', [req.params.id]);
+      await audit(q, { ...actor(req), action: 'case.deleted', entityType: 'case', entityId: req.params.id, details: { files: docs.length } });
+      return { clientId: k.client_id, keys: docs.map((d) => d.storage_key) };
+    });
+    if (!result) return res.status(404).render('error', { message: 'Case not found.' });
+    await purgeFiles(result.keys);
+    res.redirect(303, `/clients/${result.clientId}`);
+  });
+
+  // ------------------------------------------- remove a file / a checklist item
+  app.post('/documents/:id/remove', requireUser, requireCsrf, checkId('id'), async (req, res) => {
+    const result = await inFirm(req, async (q) => {
+      const [d] = await q(
+        `UPDATE documents d SET deleted_at = now() FROM document_requests r
+          WHERE d.id = $1 AND r.id = d.request_id AND d.deleted_at IS NULL
+          RETURNING d.storage_key, d.request_id, r.case_id`,
+        [req.params.id]
+      );
+      if (!d) return null;
+      // No files left on that item: it goes back to being requested from the client.
+      await q(
+        `UPDATE document_requests SET status = 'requested', rejected_reason = NULL
+          WHERE id = $1 AND status IN ('received', 'accepted', 'rejected')
+            AND NOT EXISTS (SELECT 1 FROM documents WHERE request_id = $1 AND deleted_at IS NULL)`,
+        [d.request_id]
+      );
+      await resumeChasingIfNeeded(q, d.case_id);
+      await audit(q, { ...actor(req), action: 'document.removed', entityType: 'document', entityId: req.params.id, details: { case_id: d.case_id } });
+      return d;
+    });
+    if (!result) return res.status(404).render('error', { message: 'File not found.' });
+    await purgeFiles([result.storage_key]);
+    res.redirect(303, `/cases/${result.case_id}`);
+  });
+
+  app.post('/cases/:id/requests/:rid/delete', requireUser, requireCsrf, checkId('id', 'rid'), async (req, res) => {
+    const keys = await inFirm(req, async (q) => {
+      const docs = await q('SELECT storage_key FROM documents WHERE request_id = $1', [req.params.rid]);
+      const rows = await q('DELETE FROM document_requests WHERE id = $1 AND case_id = $2 RETURNING label', [req.params.rid, req.params.id]);
+      if (!rows.length) return null;
+      await audit(q, { ...actor(req), action: 'request.removed', entityType: 'case', entityId: req.params.id, details: { label: rows[0].label } });
+      return docs.map((d) => d.storage_key);
+    });
+    if (!keys) return res.status(404).render('error', { message: 'Checklist item not found.' });
+    await purgeFiles(keys);
+    res.redirect(303, `/cases/${req.params.id}`);
+  });
+
+  // ------------------------------------------------------ forgot password
+  app.get('/forgot', (req, res) => res.render('forgot', { sent: false, error: null }));
+
+  app.post('/forgot', async (req, res) => {
+    const email = String(req.body.email || '').trim().toLowerCase().slice(0, 200);
+    const key = `forgot|${req.ip}`;
+    if (limiter.blocked(key)) return res.status(429).render('forgot', { sent: false, error: 'Too many requests. Wait 15 minutes and try again.' });
+    limiter.fail(key);
+    const token = randomToken();
+    const [u] = await db.asApp((q) => q('SELECT * FROM reset_create($1, $2, $3)', [email, sha256(token), 60]));
+    if (u) {
+      const msg = accountEmail({ purpose: 'reset', name: u.full_name, firmName: u.firm_name, link: `${cfg.baseUrl}/reset/${token}` });
+      mailer.send({ to: u.email, toName: u.full_name, fromName: 'Fileready', ...msg }).catch((err) => console.error('Reset email failed:', err.message));
+    }
+    // Same answer whether or not the account exists.
+    res.render('forgot', { sent: true, error: null });
+  });
+
+  const tokenOk = (t) => /^[A-Za-z0-9_-]{43}$/.test(t);
+
+  app.get('/reset/:token', async (req, res) => {
+    res.set('Referrer-Policy', 'no-referrer');
+    const [r] = tokenOk(req.params.token) ? await db.asApp((q) => q('SELECT * FROM reset_check($1)', [sha256(req.params.token)])) : [];
+    if (!r) return res.status(404).render('reset', { valid: false, error: null, who: null, token: null });
+    res.render('reset', { valid: true, error: null, who: r, token: req.params.token });
+  });
+
+  app.post('/reset/:token', async (req, res) => {
+    res.set('Referrer-Policy', 'no-referrer');
+    const t = req.params.token;
+    const [r] = tokenOk(t) ? await db.asApp((q) => q('SELECT * FROM reset_check($1)', [sha256(t)])) : [];
+    if (!r) return res.status(404).render('reset', { valid: false, error: null, who: null, token: null });
+    const next = String(req.body.new_password || '').slice(0, 200);
+    const confirm = String(req.body.confirm || '').slice(0, 200);
+    const fail = (error) => res.status(400).render('reset', { valid: true, error, who: r, token: t });
+    if (next.length < MIN_PASSWORD_LENGTH) return fail(`Your password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+    if (next !== confirm) return fail('The two passwords don\'t match.');
+    const [done] = await db.asApp(async (q) => q('SELECT * FROM reset_consume($1, $2)', [sha256(t), await hashPassword(next)]));
+    if (!done) return res.status(404).render('reset', { valid: false, error: null, who: null, token: null });
+    res.redirect(303, '/login?reset=1');
+  });
+
+  // ----------------------------------------------------------------- team
+  async function loadTeam(req) {
+    return inFirm(req, (q) =>
+      q(`SELECT id, full_name, email, role, disabled_at, last_login_at, password_hash IS NOT NULL AS has_password
+           FROM users ORDER BY disabled_at NULLS FIRST, role, full_name`)
+    );
+  }
+
+  async function sendInvite(req, userId) {
+    const token = randomToken();
+    const target = await inFirm(req, async (q) => {
+      const [ok] = await q('SELECT invite_create($1, $2, $3) AS ok', [userId, sha256(token), 10080]);
+      if (!ok.ok) return null;
+      const [u] = await q('SELECT full_name, email FROM users WHERE id = $1', [userId]);
+      await audit(q, { ...actor(req), action: 'user.invited', entityType: 'user', entityId: userId });
+      return u;
+    });
+    if (!target) return false;
+    const msg = accountEmail({ purpose: 'invite', name: target.full_name, firmName: req.user.firm_name, inviter: req.user.full_name, link: `${cfg.baseUrl}/reset/${token}` });
+    try {
+      await mailer.send({ to: target.email, toName: target.full_name, fromName: 'Fileready', replyTo: req.user.email, ...msg });
+      return true;
+    } catch (err) {
+      console.error('Invite email failed:', err.message);
+      return 'email_failed';
+    }
+  }
+
+  app.get('/team', requireUser, requireOwner, async (req, res) => {
+    const flash = { invited: { ok: true, text: 'Invitation sent. The link works for 7 days.' }, failed: { ok: false, text: 'The person was added, but the invitation email couldn\'t be sent. Try "Resend invitation".' } }[req.query.f] || null;
+    res.render('team', { team: await loadTeam(req), error: null, values: {}, flash });
+  });
+
+  app.post('/team', requireUser, requireCsrf, requireOwner, async (req, res) => {
+    const v = { full_name: clean(req.body.full_name, 100), email: clean(req.body.email, 200).toLowerCase(), role: req.body.role === 'admin_staff' ? 'admin_staff' : 'adviser' };
+    const fail = async (error) => res.status(400).render('team', { team: await loadTeam(req), error, values: v, flash: null });
+    if (!v.full_name) return fail('Add their name.');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email)) return fail('That email address doesn\'t look right.');
+    let id;
+    try {
+      id = await inFirm(req, async (q) => {
+        const [u] = await q(`INSERT INTO users (firm_id, email, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id`, [req.user.firm_id, v.email, v.full_name, v.role]);
+        await audit(q, { ...actor(req), action: 'user.added', entityType: 'user', entityId: u.id, details: { role: v.role } });
+        return u.id;
+      });
+    } catch (err) {
+      if (/users_email_key|duplicate key/.test(err.message)) return fail('That email address already has a Fileready login.');
+      throw err;
+    }
+    const sent = await sendInvite(req, id);
+    res.redirect(303, `/team?f=${sent === true ? 'invited' : 'failed'}`);
+  });
+
+  app.post('/team/:uid/:action', requireUser, requireCsrf, requireOwner, checkId('uid'), async (req, res, next) => {
+    const { uid, action } = req.params;
+    if (!['resend', 'disable', 'enable'].includes(action)) return next();
+    if (uid === req.user.user_id) return res.status(400).render('error', { message: 'You can\'t change your own access here.' });
+    if (action === 'resend') {
+      const sent = await sendInvite(req, uid);
+      if (!sent) return res.status(404).render('error', { message: 'That person isn\'t active in your firm.' });
+      return res.redirect(303, `/team?f=${sent === true ? 'invited' : 'failed'}`);
+    }
+    const ok = await inFirm(req, async (q) => {
+      const rows = await q(`UPDATE users SET disabled_at = ${action === 'disable' ? 'now()' : 'NULL'} WHERE id = $1 RETURNING id`, [uid]);
+      if (!rows.length) return false;
+      if (action === 'disable') await q('SELECT sessions_revoke_user($1)', [uid]);
+      await audit(q, { ...actor(req), action: `user.${action}d`, entityType: 'user', entityId: uid });
+      return true;
+    });
+    if (!ok) return res.status(404).render('error', { message: 'Person not found.' });
+    res.redirect(303, '/team');
+  });
+
+  // ------------------------------------------------------------- settings
+  app.get('/settings', requireUser, requireOwner, async (req, res) => {
+    const [firm] = await inFirm(req, (q) => q('SELECT name, reminder_every_days, max_reminders FROM firms'));
+    res.render('settings', { values: firm, error: null, flash: req.query.saved ? { ok: true, text: 'Settings saved.' } : null });
+  });
+
+  app.post('/settings', requireUser, requireCsrf, requireOwner, async (req, res) => {
+    const v = { name: clean(req.body.name, 120), reminder_every_days: Number(req.body.reminder_every_days), max_reminders: Number(req.body.max_reminders) };
+    let error = null;
+    if (!v.name) error = 'Add your firm\'s name.';
+    else if (!Number.isInteger(v.reminder_every_days) || v.reminder_every_days < 1 || v.reminder_every_days > 30) error = 'Days between reminders must be a whole number from 1 to 30.';
+    else if (!Number.isInteger(v.max_reminders) || v.max_reminders < 1 || v.max_reminders > 20) error = 'Most emails per case must be a whole number from 1 to 20.';
+    if (error) return res.status(400).render('settings', { values: v, error, flash: null });
+    await inFirm(req, async (q) => {
+      await q('UPDATE firms SET name = $1, reminder_every_days = $2, max_reminders = $3', [v.name, v.reminder_every_days, v.max_reminders]);
+      await audit(q, { ...actor(req), action: 'firm.settings_updated', entityType: 'firm', entityId: req.user.firm_id, details: { reminder_every_days: v.reminder_every_days, max_reminders: v.max_reminders } });
+    });
+    res.redirect(303, '/settings?saved=1');
+  });
+
   // ------------------------------------------- client upload page (no login)
   async function resolveLink(token) {
     if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
@@ -473,6 +814,29 @@ export function createApp({ db, storage, mailer, config }) {
       );
       return { info, requests };
     });
+  }
+
+  // Tell the case's adviser that the client uploaded, at most once every 30 minutes per case.
+  async function notifyAdviser(link) {
+    const row = await db.asFirm(link.firm_id, async (q) => {
+      const [r] = await q(
+        `UPDATE cases c SET last_upload_alert_at = now()
+           FROM clients cl, users u
+          WHERE c.id = $1 AND cl.id = c.client_id AND cl.firm_id = c.firm_id AND u.id = c.adviser_id AND u.firm_id = c.firm_id
+            AND u.disabled_at IS NULL AND (c.last_upload_alert_at IS NULL OR c.last_upload_alert_at < now() - interval '30 minutes')
+          RETURNING u.email, u.full_name, cl.first_name, cl.last_name`,
+        [link.case_id]
+      );
+      if (!r) return null;
+      const items = await q(`SELECT label FROM document_requests WHERE case_id = $1 AND status = 'received' ORDER BY sort_order`, [link.case_id]);
+      return { ...r, items: items.map((i) => i.label) };
+    });
+    if (!row) return;
+    const msg = uploadAlertEmail({
+      adviserName: row.full_name, clientName: `${row.first_name} ${row.last_name}`, items: row.items,
+      link: `${cfg.baseUrl}/cases/${link.case_id}`,
+    });
+    await mailer.send({ to: row.email, toName: row.full_name, fromName: 'Fileready', ...msg });
   }
 
   app.get('/u/:token', async (req, res) => {
@@ -525,6 +889,7 @@ export function createApp({ db, storage, mailer, config }) {
       return true;
     });
     if (!saved) return showError('That item no longer needs a file.');
+    notifyAdviser(link).catch((err) => console.error('Upload alert failed:', err.message));
     res.redirect(303, `/u/${req.params.token}?done=1`);
   });
 
