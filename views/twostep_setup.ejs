@@ -14,7 +14,7 @@
     <li>Scan this code, or type the key below.</li>
     <li>Enter the 6-digit code the app shows.</li>
   </ol>
-  <div class="qr"><%- qr %></div>
+  <div class="qr" role="img" aria-label="QR code to add Fileready to your authenticator app. If you can't scan it, type the key shown below."><%- qr %></div>
   <p class="small muted">Key: <span class="num" style="color:var(--ink);font-weight:600"><%= secret %></span></p>
   <% if (error) { %><p class="notice error" role="alert"><%= error %></p><% } %>
   <form method="post" action="/account/2fa/setup">

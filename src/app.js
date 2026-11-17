@@ -109,6 +109,7 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     res.locals.user = null;
     res.locals.flash = null;
     res.locals.path = req.path;
+    res.locals.siteUrl = cfg.baseUrl;
     res.locals.allowSignup = cfg.allowSignup; res.locals.dateOnly = dateOnly; res.locals.formatDue = formatDue;
     res.locals.billingBanner = null;
     const token = req.cookies[SESSION_COOKIE];
@@ -220,9 +221,47 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
   // ----------------------------------------------------------- dashboard
   // ---------------------------------------------------------- legal pages
   const legal = { name: cfg.legalName || 'Fileready', address: cfg.legalAddress, email: cfg.privacyEmail || cfg.contactEmail };
-  for (const [doc, title] of [['privacy', 'Privacy policy'], ['terms', 'Terms of service'], ['dpa', 'Data processing agreement']]) {
-    app.get(`/${doc}`, (req, res) => res.render('legal', { doc, title, legal }));
+  const legalPages = [
+    ['privacy', 'Privacy policy', 'What personal data Fileready collects, why, where it is stored, how long it is kept, and your rights under GDPR.'],
+    ['terms', 'Terms of service', 'The terms for mortgage broker firms using Fileready: trial, subscription, cancellation, data at the end of the agreement, and liability.'],
+    ['dpa', 'Data processing agreement', 'Fileready\'s GDPR Article 28 data processing agreement with broker firms: security measures, sub-processors, breach notice and deletion.'],
+  ];
+  for (const [doc, title, description] of legalPages) {
+    app.get(`/${doc}`, (req, res) => res.render('legal', { doc, title, description, legal }));
   }
+
+  // ---------------------------------------------------------- crawlers and icons
+  const site = cfg.baseUrl.replace(/\/$/, '');
+  app.get('/robots.txt', (req, res) => {
+    res.type('text/plain').send([
+      'User-agent: *',
+      'Allow: /',
+      ...['/u/', '/cases', '/clients', '/documents', '/search', '/checklists', '/team', '/settings', '/account', '/billing',
+        '/login/2fa', '/reset', '/internal/', '/stripe/', '/dev/'].map((p) => `Disallow: ${p}`),
+      '',
+      `Sitemap: ${site}/sitemap.xml`,
+      '',
+    ].join('\n'));
+  });
+  app.get('/sitemap.xml', (req, res) => {
+    const pages = [['/', '1.0'], ['/security', '0.6'], ['/privacy', '0.3'], ['/terms', '0.3'], ['/dpa', '0.3']];
+    if (cfg.contactEmail) pages.push(['/demo', '0.8']);
+    if (cfg.allowSignup) pages.push(['/signup', '0.8']);
+    const lastmod = '2026-11-17';
+    res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${
+      pages.map(([p, pr]) => `  <url><loc>${site}${p}</loc><lastmod>${lastmod}</lastmod><priority>${pr}</priority></url>`).join('\n')
+    }\n</urlset>\n`);
+  });
+  for (const f of ['favicon.ico', 'apple-touch-icon.png']) {
+    app.get(`/${f}`, (req, res) => res.sendFile(path.join(ROOT, 'public', f), { maxAge: '7d' }));
+  }
+  app.get('/site.webmanifest', (req, res) => {
+    res.type('application/manifest+json').send(JSON.stringify({
+      name: 'Fileready', short_name: 'Fileready', start_url: '/', display: 'standalone',
+      background_color: '#F3F4F1', theme_color: '#0F3A44',
+      icons: [{ src: '/static/icon-192.png', sizes: '192x192', type: 'image/png' }, { src: '/static/icon-512.png', sizes: '512x512', type: 'image/png' }],
+    }));
+  });
 
   // ---------------------------------------------------------- demo requests
   // A public form that emails the request to CONTACT_EMAIL, with Reply-To set

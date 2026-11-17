@@ -421,3 +421,44 @@ test('privacy, terms and DPA pages are public, use the configured business detai
   for (const l of ['/privacy', '/terms', '/dpa']) assert.ok(home.text.includes(`href="${l}"`), `home links ${l}`);
   assert.match((await request(app).get('/signup')).text, /href="\/dpa"/);
 });
+
+// ------------------------------------------------------------- SEO, social and icons
+test('public pages have titles, descriptions, canonical and social tags; private pages stay out of search', async () => {
+  const site = createApp({ db, storage: localDiskStorage(storageDir), mailer, config: { baseUrl: 'https://fileready.example', contactEmail: 'hello@fileready.test' } });
+  const home = (await request(site).get('/')).text;
+  assert.match(home, /<title>Fileready – Document chasing for Irish mortgage brokers<\/title>/);
+  assert.match(home, /<meta name="description" content="Fileready sends your mortgage clients/);
+  assert.match(home, /<meta name="robots" content="index, follow">/);
+  assert.match(home, /<link rel="canonical" href="https:\/\/fileready\.example\/">/);
+  assert.match(home, /<meta property="og:image" content="https:\/\/fileready\.example\/static\/og-image\.png">/);
+  assert.match(home, /twitter:card" content="summary_large_image"/);
+  assert.equal((home.match(/<title>/g) || []).length, 1);
+  for (const [url, title] of [['/security', 'Security and privacy'], ['/privacy', 'Privacy policy'], ['/demo', 'Book a demo']]) {
+    const t = (await request(site).get(url)).text;
+    assert.match(t, new RegExp(`<title>${title} – Fileready</title>`), url);
+    assert.match(t, /<meta name="robots" content="index, follow">/, url);
+    assert.match(t, new RegExp(`canonical" href="https://fileready.example${url}"`), url);
+    const d = t.match(/<meta name="description" content="([^"]+)"/)[1];
+    assert.ok(d.length > 50 && d.length <= 170, `${url} description length ${d.length}`);
+  }
+  assert.match((await request(site).get('/login')).text, /<meta name="robots" content="noindex, nofollow">/);
+  assert.match((await s.owner.agent.get('/')).text, /noindex, nofollow/);
+  assert.match((await request(app).get(`/u/${s.token}`)).text, /noindex, nofollow/);
+});
+
+test('robots.txt, sitemap.xml, icons, manifest and the social image are served', async () => {
+  const site = createApp({ db, storage: localDiskStorage(storageDir), mailer, config: { baseUrl: 'https://fileready.example', contactEmail: 'hello@fileready.test' } });
+  const robots = await request(site).get('/robots.txt');
+  assert.equal(robots.status, 200);
+  assert.match(robots.text, /Disallow: \/u\//);
+  assert.match(robots.text, /Sitemap: https:\/\/fileready\.example\/sitemap\.xml/);
+  const map = await request(site).get('/sitemap.xml');
+  assert.match(map.headers['content-type'], /xml/);
+  for (const p of ['/', '/security', '/privacy', '/terms', '/dpa', '/demo']) assert.ok(map.text.includes(`<loc>https://fileready.example${p}</loc>`), p);
+  assert.ok(!map.text.includes('/signup'), 'sign-up left out while it is off');
+  for (const f of ['/favicon.ico', '/apple-touch-icon.png', '/static/favicon.svg', '/static/og-image.png', '/static/icon-512.png']) {
+    assert.equal((await request(site).get(f)).status, 200, f);
+  }
+  const mf = await request(site).get('/site.webmanifest');
+  assert.equal(JSON.parse(mf.text).icons.length, 2);
+});
