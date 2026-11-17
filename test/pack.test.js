@@ -384,7 +384,7 @@ test('the trial-ended banner shows to the owner once the trial is over', async (
 test('the demo form emails the request to the contact address, with reply-to set to the visitor', async () => {
   const site = createApp({ db, storage: localDiskStorage(storageDir), mailer, config: { baseUrl: BASE, contactEmail: 'hello@fileready.test' } });
   const home = await request(site).get('/');
-  assert.match(home.text, /href="\/demo">Book a 15-minute demo/);
+  assert.match(home.text, /href="\/demo"><span class="lg">Book a 15-minute demo/);
   assert.ok(!home.text.includes('mailto:'), 'no mail-app link');
   assert.equal((await request(site).get('/demo')).status, 200);
   assert.equal((await request(site).post('/demo').type('form').send({ name: 'Máire', firm: 'West Cork', email: 'not-an-email' })).status, 400);
@@ -441,7 +441,8 @@ test('public pages have titles, descriptions, canonical and social tags; private
     const d = t.match(/<meta name="description" content="([^"]+)"/)[1];
     assert.ok(d.length > 50 && d.length <= 170, `${url} description length ${d.length}`);
   }
-  assert.match((await request(site).get('/login')).text, /<meta name="robots" content="noindex, nofollow">/);
+  assert.match((await request(site).get('/forgot')).text, /<meta name="robots" content="noindex, nofollow">/);
+  assert.match((await request(site).get('/login')).text, /<main class="auth-form">/);
   assert.match((await s.owner.agent.get('/')).text, /noindex, nofollow/);
   assert.match((await request(app).get(`/u/${s.token}`)).text, /noindex, nofollow/);
 });
@@ -461,4 +462,24 @@ test('robots.txt, sitemap.xml, icons, manifest and the social image are served',
   }
   const mf = await request(site).get('/site.webmanifest');
   assert.equal(JSON.parse(mf.text).icons.length, 2);
+});
+
+test('unknown addresses get the custom 404 page with status 404', async () => {
+  const anon = await request(app).get('/this-does-not-exist');
+  assert.equal(anon.status, 404);
+  assert.match(anon.text, /This page isn't here/);
+  assert.match(anon.text, /noindex/);
+  assert.match(anon.text, /href="\/login"/);
+  const staff = await s.owner.agent.get('/nope');
+  assert.equal(staff.status, 404);
+  assert.match(staff.text, /action="\/search"/);
+  assert.match(staff.text, /Back to cases/);
+});
+
+test('responses are gzip-compressed and CSS is versioned for long caching', async () => {
+  const res = await request(app).get('/privacy').set('Accept-Encoding', 'gzip');
+  assert.equal(res.headers['content-encoding'], 'gzip');
+  assert.match(res.text, /\/static\/app\.css\?v=[a-z0-9]+"/);
+  const css = await request(app).get('/static/app.css');
+  assert.match(css.headers['cache-control'], /max-age=2592000/);
 });

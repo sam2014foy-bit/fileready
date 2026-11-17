@@ -1,5 +1,6 @@
 import express from 'express';
 import helmet from 'helmet';
+import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import crypto from 'node:crypto';
@@ -40,6 +41,9 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
   app.set('view engine', 'ejs');
   app.set('views', path.join(ROOT, 'views'));
   app.set('trust proxy', 1);
+  app.use(compression());
+  // Changes on every deploy, so browsers can cache CSS and JS for a long time.
+  app.locals.v = (process.env.RENDER_GIT_COMMIT || Date.now().toString(36)).slice(0, 10);
   app.disable('x-powered-by');
 
   // Referrer-Policy 'same-origin': browsers send Origin "null" on our own form
@@ -49,10 +53,10 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     contentSecurityPolicy: { directives: { 'form-action': ["'self'"] } },
     referrerPolicy: { policy: 'same-origin' },
   }));
-  app.use('/static', express.static(path.join(ROOT, 'public'), { maxAge: '1h' }));
+  app.use('/static', express.static(path.join(ROOT, 'public'), { maxAge: '30d' }));
   // Animation libraries, served from our own origin so the CSP stays 'self'.
-  app.use('/static/vendor/gsap', express.static(path.join(ROOT, 'node_modules/gsap/dist'), { maxAge: '7d' }));
-  app.use('/static/vendor/lenis', express.static(path.join(ROOT, 'node_modules/lenis/dist'), { maxAge: '7d' }));
+  app.use('/static/vendor/gsap', express.static(path.join(ROOT, 'node_modules/gsap/dist'), { maxAge: '30d' }));
+  app.use('/static/vendor/lenis', express.static(path.join(ROOT, 'node_modules/lenis/dist'), { maxAge: '30d' }));
   app.get('/healthz', (req, res) => res.type('text').send('ok'));
 
   // Called by the scheduler (Supabase pg_cron) to send due reminders.
@@ -1397,7 +1401,7 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
   });
 
   // -------------------------------------------------------------- errors
-  app.use((req, res) => res.status(404).render('error', { message: 'Page not found.' }));
+  app.use((req, res) => res.status(404).render('not_found'));
   app.use((err, req, res, _next) => {
     console.error(err);
     res.status(500).render('error', { message: 'Something went wrong. Please try again.' });

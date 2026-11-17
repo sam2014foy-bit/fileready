@@ -378,7 +378,7 @@ textarea:focus { outline: none; border-color: var(--petrol); box-shadow: 0 0 0 3
 ol.steps { padding-left: 20px; margin: 0 0 8px; } ol.steps li { margin-bottom: 4px; }
 ul.codes { list-style: none; padding: 16px; margin: 16px 0 24px; background: var(--porcelain); border-radius: var(--r-control); display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-weight: 600; letter-spacing: .02em; }
 .prose h2 { margin: 24px 0 8px; } .prose h2:first-child { margin-top: 0; } .prose p, .prose li { color: var(--ink); } .prose ul { padding-left: 20px; }
-@media (max-width: 960px) { .side-search { margin: 0; order: 3; flex: 1 1 160px; } }
+
 @media (max-width: 700px) { .today { grid-template-columns: 1fr; } .note-form { flex-direction: column; align-items: stretch; } }
 
 /* When GSAP drives the ring (motion.js), turn off the CSS version. */
@@ -396,3 +396,47 @@ ul.codes { list-style: none; padding: 16px; margin: 16px 0 24px; background: var
 .legal-date { margin: 0 0 28px; }
 .prose h3 { font: 600 16px/1.4 var(--sans); margin: 18px 0 6px; color: var(--ink); }
 .prose code { font-size: .92em; background: var(--porcelain); padding: 1px 5px; border-radius: 4px; }
+
+/* ---------- phones and tablets: compact top bar instead of the sidebar ---------- */
+@media (max-width: 960px) {
+  .side { display: grid; grid-template-columns: 1fr auto; gap: 12px 12px; padding: 14px 16px 10px; }
+  .side .wordmark { grid-column: 1; grid-row: 1; padding: 0; }
+  .side .new { grid-column: 2; grid-row: 1; margin: 0; }
+  .side-search { grid-column: 1 / -1; grid-row: 2; margin: 0; }
+  .side-search input { height: 42px; }
+  .side nav { grid-column: 1 / -1; grid-row: 3; flex-direction: row; gap: 4px; margin: 0 -16px; padding: 0 16px 2px;
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; min-width: 0; }
+  .side nav::-webkit-scrollbar { display: none; }
+  .side nav a { flex: none; padding: 10px 12px; }
+  .side .who { grid-column: 1 / -1; grid-row: 4; margin: 0; padding: 10px 0 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .side .who > div:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .side .who .acts { margin: 0; flex: none; }
+  .main { min-width: 0; }
+}
+/* Comfortable tap targets (WCAG 2.2: at least 24 by 24 pixels) */
+button.link, .link-plain, .side .who .acts a, .side .who .acts button { min-height: 32px; display: inline-flex; align-items: center; }
+@media (max-width: 700px) {
+  button.link, .link-plain { min-height: 40px; }
+  .row-actions { flex-wrap: wrap; gap: 4px 16px; }
+  .due-form input { height: 40px; }
+  .role-form select { height: 40px; }
+  table, pre { max-width: 100%; }
+  .qr { width: 180px; }
+  ul.codes { grid-template-columns: 1fr; }
+  .main { overflow-wrap: anywhere; }
+}
+
+/* 404 */
+.nf { max-width: 520px; }
+.nf-word { color: var(--petrol); padding: 0; margin-bottom: 48px; } .nf-word span { color: var(--ink); }
+.nf-code { margin: 0 0 8px; font: 600 14px var(--sans); color: var(--brass-ink); }
+.nf h1 { margin: 0 0 16px; }
+.nf-search { display: flex; gap: 12px; align-items: flex-end; margin: 28px 0 20px; }
+.nf-search label { flex: 1; margin: 0; } .nf-search input { margin-bottom: 0; }
+.nf-links { list-style: none; padding: 0; margin: 28px 0 0; display: flex; gap: 24px; font-weight: 500; }
+@media (max-width: 520px) { .nf-search { flex-direction: column; align-items: stretch; } }
+/* Long checkbox labels wrap instead of running off the screen */
+label.inline { white-space: normal; align-items: flex-start; max-width: 100%; }
+label.inline input[type="checkbox"], label.inline input[type="radio"] { flex: none; margin-top: 3px; }
+/* Name links in lists and tables get a taller tap area */
+td a, .plain li > a, .results a { display: inline-block; padding-block: 3px; }

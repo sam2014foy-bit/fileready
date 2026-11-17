@@ -1,4 +1,4 @@
-<%- include('partials/head', { title: 'Log in', description: 'Log in to Fileready.' }) %>
+<%- include('partials/head', { title: 'Log in', index: true, description: 'Log in to Fileready, the document chasing app for Irish mortgage brokers.' }) %>
 <div class="auth">
   <section class="auth-art">
     <a class="wordmark" href="/login"><%- include('partials/mark') %><span>Fileready</span></a>
@@ -15,7 +15,7 @@
       <span>Your clients get a checklist and a secure link. Fileready reminds them until the file is complete.</span>
     </blockquote>
   </section>
-  <section class="auth-form">
+  <main class="auth-form">
     <form method="post" action="/login">
       <h1>Log in</h1>
       <p class="lede">Welcome back. Pick up where your files left off.</p>
@@ -28,6 +28,6 @@
       <% if (typeof allowSignup !== 'undefined' && allowSignup) { %><p class="small muted" style="text-align:center">New to Fileready? <a href="/signup">Start a free trial</a></p><% } %>
       <p class="small muted" style="text-align:center"><a href="/security">Security</a> &nbsp; <a href="/privacy">Privacy</a> &nbsp; <a href="/terms">Terms</a></p>
     </form>
-  </section>
+  </main>
 </div>
 </body></html>

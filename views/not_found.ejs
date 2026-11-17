@@ -1,0 +1,28 @@
+<%- include('partials/head', { title: 'Page not found', description: 'This page doesn\'t exist.' }) %>
+<% if (typeof user !== 'undefined' && user) { %><%- include('partials/nav') %>
+  <div class="nf">
+    <p class="nf-code">Error 404</p>
+    <h1>This page isn't here</h1>
+    <p class="muted">It may have been moved or deleted, or the address may have a typo. If you followed a link to a case or client, it may belong to a case that has since been deleted.</p>
+    <form method="get" action="/search" class="nf-search" role="search">
+      <label>Search clients and cases <input name="q" placeholder="Name, email, phone or lender"></label>
+      <button class="btn">Search</button>
+    </form>
+    <p><a href="/">Back to cases</a></p>
+  </div>
+<%- include('partials/foot') %>
+<% } else { %>
+<main class="plain-page nf">
+  <a class="wordmark nf-word" href="/"><%- include('partials/mark') %><span>Fileready</span></a>
+  <p class="nf-code">Error 404</p>
+  <h1>This page isn't here</h1>
+  <p class="muted">It may have been moved, or the address may have a typo.</p>
+  <p class="muted">If you're a client trying to send documents to your broker, use the most recent link they sent you. Each new reminder comes with a fresh link.</p>
+  <ul class="nf-links">
+    <li><a href="/">Home</a></li>
+    <li><a href="/login">Log in</a></li>
+    <li><a href="/security">Security</a></li>
+  </ul>
+</main>
+</body></html>
+<% } %>

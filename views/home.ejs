@@ -6,8 +6,8 @@
 <%- include('partials/meta', { fullTitle: 'Fileready – Document chasing for Irish mortgage brokers', description: 'Fileready sends your mortgage clients a checklist and a secure upload link, then reminds them about what\'s missing until the file is complete. Built in Ireland.', index: true }) %>
   <link rel="preload" href="/static/fonts/newsreader-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/static/fonts/hanken-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/static/app.css">
-  <link rel="stylesheet" href="/static/home.css">
+  <link rel="stylesheet" href="/static/app.css?v=<%= v %>">
+  <link rel="stylesheet" href="/static/home.css?v=<%= v %>">
 </head>
 <%
   const items = ['Photo ID', 'Proof of address', 'Last 3 payslips', 'Employment Detail Summary', 'Salary certificate', 'Current account statements', 'Savings statements'];
@@ -21,9 +21,9 @@
     ['Tuesday, 12:10', 'Everything is in.', 'The last statements arrive and chasing stops by itself. Accept them, and download the whole file as one zip for the lender.'],
   ];
   let primary;
-  if (allowSignup) primary = { href: '/signup', label: 'Start a free trial' };
-  else if (contactEmail) primary = { href: '/demo', label: 'Book a 15-minute demo' };
-  else primary = { href: '/login', label: 'Log in' };
+  if (allowSignup) primary = { href: '/signup', label: 'Start a free trial', short: 'Free trial' };
+  else if (contactEmail) primary = { href: '/demo', label: 'Book a 15-minute demo', short: 'Book a demo' };
+  else primary = { href: '/login', label: 'Log in', short: 'Log in' };
 %>
 <body class="home">
 <header class="h-bar">
@@ -32,7 +32,7 @@
     <a href="#how">How it works</a>
     <a href="/security">Security</a>
     <% if (primary.href !== '/login') { %><a href="/login">Log in</a><% } %>
-    <a class="btn small" href="<%= primary.href %>"><%= primary.label %></a>
+    <a class="btn small" href="<%= primary.href %>"><span class="lg"><%= primary.label %></span><span class="sm"><%= primary.short %></span></a>
   </nav>
 </header>
 
@@ -127,6 +127,6 @@
 <script src="/static/vendor/gsap/gsap.min.js" defer></script>
 <script src="/static/vendor/gsap/ScrollTrigger.min.js" defer></script>
 <script src="/static/vendor/lenis/lenis.min.js" defer></script>
-<script src="/static/home.js" defer></script>
+<script src="/static/home.js?v=<%= v %>" defer></script>
 </body>
 </html>
