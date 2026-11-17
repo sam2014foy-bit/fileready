@@ -22,6 +22,7 @@
 // Sign-up:
 //   ALLOW_SIGNUP           'true' to let new firms sign up for a free trial (off by default)
 //   TRIAL_DAYS             default 30
+//   CONTACT_EMAIL          optional: shown as "Book a demo" on the home page when sign-up is off
 // Web:
 //   BASE_URL               optional on Render (RENDER_EXTERNAL_URL is used)
 import pg from 'pg';
@@ -107,7 +108,7 @@ try {
     config: {
       baseUrl, secureCookies: baseUrl.startsWith('https://'), remindersSecret: env.REMINDERS_SECRET?.trim() || null,
       appSecret: appSecret && appSecret.length >= 32 ? appSecret : null,
-      allowSignup: env.ALLOW_SIGNUP === 'true', trialDays: Number(env.TRIAL_DAYS || 30),
+      allowSignup: env.ALLOW_SIGNUP === 'true', contactEmail: env.CONTACT_EMAIL?.trim() || null, trialDays: Number(env.TRIAL_DAYS || 30),
       stripePriceId: env.STRIPE_PRICE_ID?.trim() || null, stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET?.trim() || null,
     },
   });

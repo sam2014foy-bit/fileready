@@ -307,7 +307,7 @@ test('two-step login: set up with an authenticator code, get recovery codes, the
 
   const pending = await login('adv@cork.test');
   assert.equal(pending.pending, true);
-  assert.equal((await pending.agent.get('/')).status, 302, 'no access before the code');
+  assert.equal((await pending.agent.get('/clients')).status, 302, 'no access before the code');
   assert.equal((await pending.agent.post('/login/2fa').type('form').send({ code: '123456' })).status, 401);
   const next = totpCode(secret, Date.now() + 30000);
   assert.equal((await pending.agent.post('/login/2fa').type('form').send({ code: next })).status, 303);

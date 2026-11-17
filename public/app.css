@@ -380,3 +380,6 @@ ul.codes { list-style: none; padding: 16px; margin: 16px 0 24px; background: var
 .prose h2 { margin: 24px 0 8px; } .prose h2:first-child { margin-top: 0; } .prose p, .prose li { color: var(--ink); } .prose ul { padding-left: 20px; }
 @media (max-width: 960px) { .side-search { margin: 0; order: 3; flex: 1 1 160px; } }
 @media (max-width: 700px) { .today { grid-template-columns: 1fr; } .note-form { flex-direction: column; align-items: stretch; } }
+
+/* When GSAP drives the ring (motion.js), turn off the CSS version. */
+.motion .ring .arc { animation: none; }

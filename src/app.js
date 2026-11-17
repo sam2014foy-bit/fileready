@@ -31,7 +31,7 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 export function createApp({ db, storage, mailer, sms = null, stripe = null, config }) {
   const cfg = {
     sessionHours: 12, linkDays: 14, secureCookies: false, remindersSecret: null, devOutbox: false,
-    appSecret: null, allowSignup: false, trialDays: 30, stripePriceId: null, stripeWebhookSecret: null, ...config,
+    appSecret: null, allowSignup: false, contactEmail: null, trialDays: 30, stripePriceId: null, stripeWebhookSecret: null, ...config,
   };
   const app = express();
   const limiter = createLoginLimiter();
@@ -50,6 +50,9 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     referrerPolicy: { policy: 'same-origin' },
   }));
   app.use('/static', express.static(path.join(ROOT, 'public'), { maxAge: '1h' }));
+  // Animation libraries, served from our own origin so the CSP stays 'self'.
+  app.use('/static/vendor/gsap', express.static(path.join(ROOT, 'node_modules/gsap/dist'), { maxAge: '7d' }));
+  app.use('/static/vendor/lenis', express.static(path.join(ROOT, 'node_modules/lenis/dist'), { maxAge: '7d' }));
   app.get('/healthz', (req, res) => res.type('text').send('ok'));
 
   // Called by the scheduler (Supabase pg_cron) to send due reminders.
@@ -215,6 +218,11 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
   });
 
   // ----------------------------------------------------------- dashboard
+  // Logged-out visitors get the marketing page; staff go straight to their cases.
+  app.get('/', (req, res, next) => {
+    if (req.user || req.pendingMfa) return next();
+    res.render('home', { allowSignup: cfg.allowSignup, contactEmail: cfg.contactEmail });
+  });
   app.get('/', requireUser, async (req, res) => {
     const filters = ['open', 'complete', 'all', 'review', 'stuck', 'due'];
     const filter = filters.includes(req.query.show) ? req.query.show : 'open';
@@ -1305,7 +1313,7 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     });
     if (!saved) return showError('That item no longer needs a file.');
     notifyAdviser(link).catch((err) => console.error('Upload alert failed:', err.message));
-    res.redirect(303, `/u/${req.params.token}?done=1`);
+    res.redirect(303, `/u/${req.params.token}?done=${req.params.rid}`);
   });
 
   // -------------------------------------------------------------- errors

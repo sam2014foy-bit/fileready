@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en-IE">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0F3A44">
+  <title>Fileready: document chasing for Irish mortgage brokers</title>
+  <meta name="description" content="Fileready sends your mortgage clients a checklist and a secure upload link, then reminds them about what's missing until the file is complete.">
+  <link rel="preload" href="/static/fonts/newsreader-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/hanken-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/home.css">
+</head>
+<%
+  const items = ['Photo ID', 'Proof of address', 'Last 3 payslips', 'Employment Detail Summary', 'Salary certificate', 'Current account statements', 'Savings statements'];
+  const steps = [
+    ['Monday, 9:02', 'You add Niamh and pick your mortgage checklist.', 'Fileready emails her the list with a private upload link. That\'s the last email you write for this file.'],
+    ['Monday, 20:40', 'She uploads from her phone after dinner.', 'No account, no app, no password. Phone photos are fine, and each upload takes one tap.'],
+    ['Tuesday, 10:15', 'You check each file in one place.', 'Accept what\'s right. A payslip with a page cut off goes back with your reason, and she\'s asked for it again straight away.'],
+    ['Thursday, 9:00', 'A reminder goes out on its own.', 'It lists only what\'s still missing, never the whole list again. Weekdays and Saturdays, 9am to 7pm, every three days unless you change it.'],
+    ['Friday, 18:30', 'Most of the file is in.', 'Payslips, the Employment Detail Summary and the salary certificate arrive together. Your adviser gets one alert, not five.'],
+    ['Monday, 9:00', 'No reply over the weekend.', 'The next reminder goes by email, and by text if your firm has texts switched on. If a client stops responding altogether, Fileready stops and flags the case so you know to pick up the phone.'],
+    ['Tuesday, 12:10', 'Everything is in.', 'The last statements arrive and chasing stops by itself. Accept them, and download the whole file as one zip for the lender.'],
+  ];
+  let primary;
+  if (allowSignup) primary = { href: '/signup', label: 'Start a free trial' };
+  else if (contactEmail) primary = { href: 'mailto:' + contactEmail + '?subject=Fileready%20demo', label: 'Book a 15-minute demo' };
+  else primary = { href: '/login', label: 'Log in' };
+%>
+<body class="home">
+<header class="h-bar">
+  <a class="h-word" href="/"><%- include('partials/mark') %><span>Fileready</span></a>
+  <nav class="h-nav" aria-label="Main">
+    <a href="#how">How it works</a>
+    <a href="/security">Security</a>
+    <% if (primary.href !== '/login') { %><a href="/login">Log in</a><% } %>
+    <a class="btn small" href="<%= primary.href %>"><%= primary.label %></a>
+  </nav>
+</header>
+
+<main>
+  <section class="h-story">
+    <div class="h-steps">
+      <div class="h-hero">
+    <h1>Stop chasing payslips.</h1>
+    <p class="h-lede">Fileready sends your mortgage clients a checklist and a secure upload link, then reminds them about what's still missing until the file is complete. You spend the time advising.</p>
+    <div class="h-actions">
+      <a class="btn" href="<%= primary.href %>"><%= primary.label %></a>
+      <a class="h-plain" href="#how">See one file come together</a>
+    </div>
+    <p class="h-for">Built in Ireland for Irish mortgage brokers. Documents are stored in Ireland.</p>
+      </div>
+
+      <% steps.forEach(([when, head, body], i) => { %>
+      <article class="h-step" data-step="<%= i %>"<%- i === 0 ? ' id="how"' : '' %>>
+        <p class="h-when"><span class="num"><%= when %></span></p>
+        <h2><%= head %></h2>
+        <p><%= body %></p>
+      </article>
+      <% }) %>
+    </div>
+
+    <div class="h-stage">
+      <div class="h-card" aria-hidden="true">
+        <div class="h-card-head">
+          <div>
+            <p class="h-client">Niamh Byrne</p>
+            <p class="h-case">Mortgage application, Demo Bank</p>
+          </div>
+          <div class="h-ring">
+            <svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="45"/><circle class="arc" cx="50" cy="50" r="45" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/></svg>
+            <b class="num"><span class="h-done">0</span>/7</b>
+          </div>
+        </div>
+        <p class="h-event"><span class="h-dot"></span><span class="h-event-text">Email sent to Niamh with 7 documents</span></p>
+        <ul class="h-items">
+          <% items.forEach((label, i) => { %>
+          <li data-item="<%= i %>"><span class="h-label"><%= label %></span><span class="chip">Requested</span></li>
+          <% }) %>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="h-band">
+    <div class="h-cols">
+      <div>
+        <h2>What your client sees</h2>
+        <p>One link, in an email or a text, that opens a page with your firm's name on it and the list of what you need. They tap an item, choose a photo or PDF, and it's done. They can come back to the same page as often as they like while the link is active.</p>
+      </div>
+      <div>
+        <h2>What you stop doing</h2>
+        <ul class="h-list">
+          <li>Writing the same follow-up email for the fourth time.</li>
+          <li>Digging payslips out of WhatsApp, Gmail and the office printer.</li>
+          <li>Working out which files are waiting on what. Your Cases page shows what needs checking, who isn't responding and what's due.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="h-trust">
+    <div class="h-trust-inner">
+      <h2>Your clients' documents, handled properly</h2>
+      <dl class="h-facts">
+        <div><dt>Stored in Ireland</dt><dd>Files and records sit in the EU West (Ireland) region, in private storage only your team can open.</dd></div>
+        <div><dt>Kept apart</dt><dd>Each firm's data is separated inside the database itself, not just hidden by the screens.</dd></div>
+        <div><dt>Two-step login</dt><dd>Every person at your firm can protect their login with an authenticator app.</dd></div>
+        <div><dt>A record of everything</dt><dd>Every upload, download, review and reminder is logged, and the log can't be edited.</dd></div>
+      </dl>
+      <a class="h-plain light" href="/security">Read how Fileready handles data</a>
+    </div>
+  </section>
+
+  <section class="h-end">
+    <h2>Your next file could chase itself.</h2>
+    <a class="btn" href="<%= primary.href %>"><%= primary.label %></a>
+  </section>
+</main>
+
+<footer class="h-foot">
+  <span>Fileready</span>
+  <a href="/security">Security and privacy</a>
+  <a href="/login">Log in</a>
+</footer>
+<script src="/static/vendor/gsap/gsap.min.js" defer></script>
+<script src="/static/vendor/gsap/ScrollTrigger.min.js" defer></script>
+<script src="/static/vendor/lenis/lenis.min.js" defer></script>
+<script src="/static/home.js" defer></script>
+</body>
+</html>

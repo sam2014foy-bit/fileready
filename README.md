@@ -37,6 +37,11 @@ required is in. Built for small Irish brokerages.
   - Morning summary email (weekdays, can be turned off on Account) and automatic deletion of closed
     cases after the firm's retention period: `POST /internal/daily/run`, scheduled 07:30 and 08:30 UTC.
   - Text reminders through Brevo SMS (off until the owner turns them on in Settings; clients can be excluded).
+  - Public home page at `/` for logged-out visitors (`views/home.ejs`, `public/home.*`): GSAP + ScrollTrigger
+    card story with Lenis smooth scrolling. In the app, GSAP only fills the progress ring and highlights a
+    just-uploaded document (`public/motion.js`). Both libraries are served from `node_modules` under
+    `/static/vendor/`. Motion is skipped for people who ask their device for reduced motion.
+    `CONTACT_EMAIL` turns the main button into "Book a 15-minute demo" while sign-up is off.
   - Public `/security` page, Stripe billing (`/billing`), self sign-up with a free trial (`ALLOW_SIGNUP=true`).
 
 ## Try it on your computer

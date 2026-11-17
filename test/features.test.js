@@ -230,7 +230,7 @@ test('forgot password: a reset link sets a new password, signs out old sessions,
   const done = await request(app).post(`/reset/${token}`).type('form').send({ new_password: 'a-whole-new-passphrase', confirm: 'a-whole-new-passphrase' });
   assert.equal(done.status, 303);
   assert.equal(done.headers.location, '/login?reset=1');
-  assert.equal((await oldSession.agent.get('/')).status, 302, 'old session signed out');
+  assert.equal((await oldSession.agent.get('/clients')).status, 302, 'old session signed out');
   assert.equal((await request(app).get(`/reset/${token}`)).status, 404, 'link used up');
   await login('adviser@cork.test', 'a-whole-new-passphrase');
   assert.match((await request(app).get('/login?reset=1')).text, /Your password is set/);
@@ -242,7 +242,7 @@ test('changing your password signs out your other sessions but keeps this one', 
   const res = await me.post('/account/password', { current: 'a-whole-new-passphrase', new_password: 'yet-another-passphrase', confirm: 'yet-another-passphrase' });
   assert.equal(res.status, 200);
   assert.equal((await me.agent.get('/')).status, 200, 'this session still works');
-  assert.equal((await other.agent.get('/')).status, 302, 'other session signed out');
+  assert.equal((await other.agent.get('/clients')).status, 302, 'other session signed out');
   s.adviser = me;
 });
 
@@ -280,7 +280,7 @@ test('removing access signs the person out and blocks login; giving access resto
   const uid = (await q1(`SELECT id FROM users WHERE email = 'grainne@cork.test'`)).id;
   assert.equal((await s.other.post(`/team/${uid}/disable`)).status, 404, 'other firm cannot');
   await s.owner.post(`/team/${uid}/disable`);
-  assert.equal((await s.grainne.agent.get('/')).status, 302, 'signed out');
+  assert.equal((await s.grainne.agent.get('/clients')).status, 302, 'signed out');
   assert.equal((await request(app).post('/login').type('form').send({ email: 'grainne@cork.test', password: 'grainnes-own-passphrase' })).status, 401);
   await s.owner.post(`/team/${uid}/enable`);
   await login('grainne@cork.test', 'grainnes-own-passphrase');

@@ -21,7 +21,7 @@
   <section class="surface">
   <ul class="checklist">
   <% for (const r of requests) { const finished = ['accepted','waived'].includes(r.status); %>
-    <li class="item status-<%= r.status %>">
+    <li class="item status-<%= r.status %>" data-rid="<%= r.id %>">
       <div class="item-main">
         <strong><%= r.label %></strong><% if (!r.required) { %> <span class="opt">if it applies</span><% } %>
         <% if (r.help_text) { %><div class="help"><%= r.help_text %></div><% } %>
@@ -42,5 +42,7 @@
   </section>
   <p class="client-foot"><%- lock %><span>Your files go straight to <%= info.firm_name %> over an encrypted connection and are stored in Ireland. Only your broker's team can open them.</span></p>
 </main>
+<script src="/static/vendor/gsap/gsap.min.js" defer></script>
 <script src="/static/upload.js" defer></script>
+<script src="/static/motion.js" defer></script>
 </body></html>

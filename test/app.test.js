@@ -53,10 +53,17 @@ const status = async (rid) => (await pglite.query('SELECT status FROM document_r
 // Shared state across the flow below (tests run in order).
 const s = {};
 
-test('pages need a login', async () => {
-  const res = await request(app).get('/');
+test('pages need a login; logged-out visitors to / get the public home page', async () => {
+  const res = await request(app).get('/clients');
   assert.equal(res.status, 302);
   assert.equal(res.headers.location, '/login');
+  const home = await request(app).get('/');
+  assert.equal(home.status, 200);
+  assert.match(home.text, /Stop chasing payslips/);
+  assert.ok(!home.text.includes('noindex'), 'home page can be found by search engines');
+  const gsap = await request(app).get('/static/vendor/gsap/gsap.min.js');
+  assert.equal(gsap.status, 200);
+  assert.equal((await request(app).get('/static/vendor/lenis/lenis.min.js')).status, 200);
 });
 
 test('wrong password is refused, with the same message as an unknown email', async () => {
@@ -214,7 +221,7 @@ test('history records the actions', async () => {
 
 test('logging out ends the session', async () => {
   await s.agent.post('/logout').type('form').send({ _csrf: s.csrf });
-  const res = await s.agent.get('/');
+  const res = await s.agent.get('/clients');
   assert.equal(res.status, 302);
 });
 
