@@ -383,3 +383,4 @@ ul.codes { list-style: none; padding: 16px; margin: 16px 0 24px; background: var
 
 /* When GSAP drives the ring (motion.js), turn off the CSS version. */
 .motion .ring .arc { animation: none; }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }

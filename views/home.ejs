@@ -25,7 +25,7 @@
   ];
   let primary;
   if (allowSignup) primary = { href: '/signup', label: 'Start a free trial' };
-  else if (contactEmail) primary = { href: 'mailto:' + contactEmail + '?subject=Fileready%20demo', label: 'Book a 15-minute demo' };
+  else if (contactEmail) primary = { href: '/demo', label: 'Book a 15-minute demo' };
   else primary = { href: '/login', label: 'Log in' };
 %>
 <body class="home">

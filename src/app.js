@@ -218,6 +218,41 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
   });
 
   // ----------------------------------------------------------- dashboard
+  // ---------------------------------------------------------- demo requests
+  // A public form that emails the request to CONTACT_EMAIL, with Reply-To set
+  // to the visitor so a reply goes straight to them.
+  const demoLimiter = createLoginLimiter({ max: 5, windowMs: 60 * 60 * 1000 });
+  const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  app.get('/demo', (req, res, next) => {
+    if (!cfg.contactEmail) return next();
+    res.render('demo', { sent: false, error: null, values: {} });
+  });
+  app.post('/demo', async (req, res, next) => {
+    if (!cfg.contactEmail) return next();
+    const v = {};
+    for (const [k, max] of [['name', 120], ['firm', 160], ['email', 254], ['phone', 40], ['message', 2000]]) v[k] = String(req.body[k] || '').trim().slice(0, max);
+    const again = (status, error) => res.status(status).render('demo', { sent: false, error, values: v });
+    if (req.body.website) return res.render('demo', { sent: true, error: null, values: { ...v, name: v.name || 'there' } }); // bot
+    if (!v.name || !v.firm) return again(400, 'Please add your name and firm.');
+    if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(v.email)) return again(400, 'Please check your email address.');
+    const key = `demo:${req.ip}`;
+    if (demoLimiter.blocked(key)) return again(429, 'Too many requests from this connection. Try again in an hour.');
+    demoLimiter.fail(key);
+    const lines = [`Name: ${v.name}`, `Firm: ${v.firm}`, `Email: ${v.email}`, `Phone: ${v.phone || '-'}`, '', v.message || '(no message)'];
+    try {
+      await mailer.send({
+        to: cfg.contactEmail, replyTo: v.email, fromName: 'Fileready website',
+        subject: `Demo request: ${v.firm.replace(/[\r\n]+/g, ' ')}`,
+        text: lines.join('\n') + '\n\nReply to this email to answer them directly.',
+        html: `<p>${lines.map(esc).join('<br>')}</p><p>Reply to this email to answer them directly.</p>`,
+      });
+    } catch (err) {
+      console.error('demo request email failed:', err.message);
+      return again(502, "Your request couldn't be sent just now. Please try again in a few minutes.");
+    }
+    res.render('demo', { sent: true, error: null, values: v });
+  });
+
   // Logged-out visitors get the marketing page; staff go straight to their cases.
   app.get('/', (req, res, next) => {
     if (req.user || req.pendingMfa) return next();

@@ -379,3 +379,27 @@ test('the trial-ended banner shows to the owner once the trial is over', async (
   await pglite.query(`UPDATE firms SET trial_ends_at = now() - interval '1 day' WHERE name = 'Kerry Mortgages'`);
   assert.match((await kerry.agent.get('/')).text, /free trial has ended/);
 });
+
+// ------------------------------------------------------------- demo requests
+test('the demo form emails the request to the contact address, with reply-to set to the visitor', async () => {
+  const site = createApp({ db, storage: localDiskStorage(storageDir), mailer, config: { baseUrl: BASE, contactEmail: 'hello@fileready.test' } });
+  const home = await request(site).get('/');
+  assert.match(home.text, /href="\/demo">Book a 15-minute demo/);
+  assert.ok(!home.text.includes('mailto:'), 'no mail-app link');
+  assert.equal((await request(site).get('/demo')).status, 200);
+  assert.equal((await request(site).post('/demo').type('form').send({ name: 'Máire', firm: 'West Cork', email: 'not-an-email' })).status, 400);
+  const before = mailer.outbox.length;
+  const ok = await request(site).post('/demo').type('form').send({ name: 'Máire Ní Bhriain', firm: 'West Cork Mortgages', email: 'maire@westcork.test', phone: '021 555 0101', message: '3 advisers <b>busy</b>' });
+  assert.equal(ok.status, 200);
+  assert.match(ok.text, /Thanks, Máire/);
+  const e = mailer.outbox[mailer.outbox.length - 1];
+  assert.equal(mailer.outbox.length, before + 1);
+  assert.equal(e.to, 'hello@fileready.test');
+  assert.equal(e.replyTo, 'maire@westcork.test');
+  assert.equal(e.subject, 'Demo request: West Cork Mortgages');
+  assert.match(e.html, /3 advisers &lt;b&gt;busy&lt;\/b&gt;/);
+  const bot = await request(site).post('/demo').type('form').send({ name: 'x', firm: 'y', email: 'a@b.co', website: 'spam.example' });
+  assert.equal(bot.status, 200);
+  assert.equal(mailer.outbox.length, before + 1, 'bots are ignored quietly');
+  assert.equal((await request(app).get('/demo')).status, 404, 'off without CONTACT_EMAIL');
+});

@@ -35,7 +35,7 @@ const baseUrl = `http://localhost:${PORT}`;
 const app = createApp({
   db, mailer, sms,
   storage: localDiskStorage('./.dev-storage'),
-  config: { baseUrl, devOutbox: true, appSecret: 'local-development-secret-not-for-production', allowSignup: true },
+  config: { baseUrl, devOutbox: true, appSecret: 'local-development-secret-not-for-production', allowSignup: true, contactEmail: 'hello@fileready.local' },
 });
 // Locally, check for due reminders every minute, at any hour.
 setInterval(() => runReminders({ db, mailer, sms, baseUrl, ignoreHours: true }).catch((e) => console.error(e)), 60_000);

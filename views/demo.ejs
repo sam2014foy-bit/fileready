@@ -1,0 +1,25 @@
+<%- include('partials/head', { title: 'Book a demo' }) %>
+<main class="plain-page">
+  <a class="wordmark" href="/"><%- include('partials/mark') %><span>Fileready</span></a>
+  <% if (sent) { %>
+    <h1>Thanks, <%= values.name.split(' ')[0] %></h1>
+    <p>Your request is in. You'll get a reply at <strong><%= values.email %></strong> within one working day to pick a time.</p>
+    <p><a href="/">Back to the home page</a></p>
+  <% } else { %>
+    <h1>Book a 15-minute demo</h1>
+    <p>See Fileready chase a real-looking file from start to finish, and ask anything. Leave your details and you'll get a reply within one working day.</p>
+    <% if (error) { %><p class="notice error" role="alert"><%= error %></p><% } %>
+    <form method="post" action="/demo" style="margin-top:24px">
+      <label>Your name <input name="name" autocomplete="name" maxlength="120" value="<%= values.name || '' %>" required autofocus></label>
+      <label>Firm <input name="firm" autocomplete="organization" maxlength="160" value="<%= values.firm || '' %>" required></label>
+      <label>Work email <input type="email" name="email" autocomplete="email" maxlength="254" value="<%= values.email || '' %>" required></label>
+      <label>Phone <span class="muted">(optional)</span> <input type="tel" name="phone" autocomplete="tel" maxlength="40" value="<%= values.phone || '' %>"></label>
+      <label>Anything we should know? <span class="muted">(optional)</span>
+        <textarea name="message" rows="3" maxlength="2000" placeholder="e.g. 3 advisers, about 15 applications a month"><%= values.message || '' %></textarea></label>
+      <label class="hp" aria-hidden="true">Leave this empty <input name="website" tabindex="-1" autocomplete="off"></label>
+      <button class="btn wide">Request a demo</button>
+    </form>
+    <p class="small muted" style="margin-top:20px">We only use these details to arrange your demo.</p>
+  <% } %>
+</main>
+</body></html>
