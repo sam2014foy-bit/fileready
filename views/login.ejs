@@ -1,12 +1,29 @@
 <%- include('partials/head', { title: 'Log in' }) %>
-<main class="narrow">
-  <h1 class="brand-big">Fileready</h1>
-  <form method="post" action="/login" class="card">
-    <h2>Log in</h2>
-    <% if (error) { %><p class="error" role="alert"><%= error %></p><% } %>
-    <label>Email <input type="email" name="email" value="<%= email %>" autocomplete="username" required autofocus></label>
-    <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
-    <button class="btn">Log in</button>
-  </form>
-</main>
+<div class="auth">
+  <section class="auth-art">
+    <a class="wordmark" href="/login"><%- include('partials/mark') %><span>Fileready</span></a>
+    <svg class="motif" viewBox="0 0 520 520" aria-hidden="true">
+      <circle cx="260" cy="260" r="250" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="1"/>
+      <circle cx="260" cy="260" r="200" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="1"/>
+      <circle cx="260" cy="260" r="150" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="10"/>
+      <circle cx="260" cy="260" r="150" fill="none" stroke="#A9834C" stroke-width="10" stroke-linecap="round"
+        stroke-dasharray="942.5" stroke-dashoffset="188.5" transform="rotate(-90 260 260)"/>
+      <circle cx="260" cy="260" r="100" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="1"/>
+    </svg>
+    <blockquote>
+      <p>Every document in, without the chasing.</p>
+      <span>Your clients get a checklist and a secure link. Fileready reminds them until the file is complete.</span>
+    </blockquote>
+  </section>
+  <section class="auth-form">
+    <form method="post" action="/login">
+      <h1>Log in</h1>
+      <p class="lede">Welcome back. Pick up where your files left off.</p>
+      <% if (error) { %><p class="notice error" role="alert"><%= error %></p><% } %>
+      <label>Email <input type="email" name="email" value="<%= email %>" autocomplete="username" required autofocus></label>
+      <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+      <button class="btn wide">Log in</button>
+    </form>
+  </section>
+</div>
 </body></html>

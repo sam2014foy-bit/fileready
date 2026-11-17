@@ -58,15 +58,22 @@ export function reminderEmail({ kind, firstName, firmName, caseTitle, adviserNam
 
   const li = (i) =>
     i.status === 'rejected'
-      ? `<li><strong>${esc(i.label)}</strong> – <span style="color:#b3261e">please upload again: ${esc(i.rejected_reason)}</span></li>`
-      : `<li><strong>${esc(i.label)}</strong>${i.help_text ? ` <span style="color:#66707c">(${esc(i.help_text)})</span>` : ''}${i.required ? '' : ' <span style="color:#66707c">– if it applies</span>'}</li>`;
-  const html = `<!doctype html><html><body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1c2430;line-height:1.5;max-width:560px;margin:0 auto;padding:16px">
-<p>Hi ${esc(firstName)},</p>
-<p>${esc(intro)}</p>
-<ul style="padding-left:20px">${[...rejected, ...missing].map(li).join('')}</ul>
-<p style="margin:24px 0"><a href="${esc(link)}" style="background:#1f5f8b;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">Upload documents</a></p>
-<p style="color:#66707c;font-size:14px">This link is private to you and works for ${linkDays} days. ${esc(replyLine)}</p>
-<p>Thanks,<br>${esc(adviserName ? `${adviserName}` : firmName)}${adviserName ? `<br>${esc(firmName)}` : ''}</p>
+      ? `<li><strong>${esc(i.label)}</strong> – <span style="color:#9A3424">please upload again: ${esc(i.rejected_reason)}</span></li>`
+      : `<li><strong>${esc(i.label)}</strong>${i.help_text ? ` <span style="color:#5E6B70">(${esc(i.help_text)})</span>` : ''}${i.required ? '' : ' <span style="color:#5E6B70">– if it applies</span>'}</li>`;
+  const html = `<!doctype html><html><body style="margin:0;background:#F3F4F1;padding:24px 12px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border:1px solid #E3E7E4;border-radius:14px">
+<tr><td style="padding:22px 28px;border-bottom:1px solid #E3E7E4;font:500 18px Georgia,'Times New Roman',serif;color:#14222B">${esc(firmName)}</td></tr>
+<tr><td style="padding:28px;font:15px/1.6 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#14222B">
+<p style="margin:0 0 14px">Hi ${esc(firstName)},</p>
+<p style="margin:0 0 18px">${esc(intro)}</p>
+<ul style="margin:0 0 24px;padding-left:20px">${[...rejected, ...missing].map(li).join('')}</ul>
+<p style="margin:0 0 24px"><a href="${esc(link)}" style="background:#0F3A44;color:#FFFFFF;padding:13px 22px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">Upload documents</a></p>
+<p style="margin:0 0 18px;color:#5E6B70;font-size:14px">This link is private to you and works for ${linkDays} days. ${esc(replyLine)}</p>
+<p style="margin:0">Thanks,<br>${esc(adviserName ? `${adviserName}` : firmName)}${adviserName ? `<br><span style="color:#5E6B70">${esc(firmName)}</span>` : ''}</p>
+</td></tr>
+<tr><td style="padding:16px 28px;border-top:1px solid #E3E7E4;font:12px/1.5 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#5E6B70">Files you upload are sent securely to ${esc(firmName)} and stored in Ireland.</td></tr>
+</table></td></tr></table>
 </body></html>`;
 
   return { subject, text, html, outstanding: n };

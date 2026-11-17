@@ -1,4 +1,12 @@
-<%- include('partials/head', { title: 'Error' }) %>
-<% if (typeof user !== 'undefined' && user) { %><%- include('partials/nav') %><% } else { %><main class="narrow"><% } %>
-  <div class="card"><p><%= message %></p><p><a href="/">Back to start</a></p></div>
-</main></body></html>
+<%- include('partials/head', { title: 'Something needs attention' }) %>
+<% if (typeof user !== 'undefined' && user) { %><%- include('partials/nav') %>
+  <div class="surface form-surface"><p style="margin:0 0 16px"><%= message %></p><a class="btn quiet small" href="/">Back to cases</a></div>
+<%- include('partials/foot') %>
+<% } else { %>
+<main class="plain-page">
+  <span class="wordmark"><%- include('partials/mark') %><span>Fileready</span></span>
+  <p><%= message %></p>
+  <p><a href="/">Back to start</a></p>
+</main>
+</body></html>
+<% } %>

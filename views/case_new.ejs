@@ -1,11 +1,12 @@
 <%- include('partials/head', { title: 'New case' }) %>
 <%- include('partials/nav') %>
-<form method="post" action="/cases" class="card narrow">
+<a class="back" href="/">← Cases</a>
+<form method="post" action="/cases" class="surface form-surface">
   <h1>New case</h1>
   <input type="hidden" name="_csrf" value="<%= csrf %>">
   <label>Client
     <select name="client_id" required>
-      <option value="">Choose…</option>
+      <option value="">Choose a client</option>
       <% for (const c of clients) { %><option value="<%= c.id %>" <%= c.id === selected ? 'selected' : '' %>><%= c.last_name %>, <%= c.first_name %></option><% } %>
     </select>
   </label>
@@ -14,7 +15,7 @@
   <label>Document checklist
     <select name="template_id">
       <% for (const t of templates) { %><option value="<%= t.id %>"><%= t.name %></option><% } %>
-      <option value="">Start empty</option>
+      <option value="">Start with an empty checklist</option>
     </select>
   </label>
   <button class="btn">Create case</button>

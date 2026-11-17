@@ -1,41 +1,46 @@
 <%- include('partials/head', { title: 'Cases' }) %>
 <%- include('partials/nav') %>
-<div class="row between">
-  <h1>Cases</h1>
-  <div class="tabs">
-    <% for (const [k, label] of [['open','Open'],['complete','Complete'],['all','All']]) { %>
-      <a href="/?show=<%= k %>" class="<%= filter === k ? 'active' : '' %>"><%= label %></a>
-    <% } %>
+<div class="page-head">
+  <div>
+    <h1>Cases</h1>
+    <p><% if (counts.review) { %><%= counts.review %> <%= counts.review === 1 ? 'file has' : 'files have' %> documents waiting for your review.<% } else { %>Nothing is waiting for your review.<% } %></p>
   </div>
+  <nav class="segments" aria-label="Filter cases">
+    <% for (const [k, label] of [['open', 'Open'], ['complete', 'Complete'], ['all', 'All']]) { %>
+      <a href="/?show=<%= k %>" <%- filter === k ? 'aria-current="page"' : '' %>><%= label %> <span class="count"><%= counts[k] %></span></a>
+    <% } %>
+  </nav>
 </div>
 <% if (!cases.length) { %>
-  <div class="empty card">
-    <p>No <%= filter === 'all' ? '' : filter %> cases yet.</p>
-    <a class="btn" href="/clients/new">Add your first client</a>
+  <div class="surface empty">
+    <h2><%= filter === 'complete' ? 'No complete files yet' : filter === 'open' ? 'No open cases' : 'No cases yet' %></h2>
+    <p><%= filter === 'complete' ? 'Files land here once every required document is accepted.' : 'Add a client and Fileready will start collecting their documents.' %></p>
+    <% if (filter !== 'complete') { %><a class="btn" href="/clients/new">Add a client</a><% } %>
   </div>
 <% } else { %>
-<table class="list">
-  <thead><tr><th>Client</th><th>Case</th><th>Documents</th><th>Needs you</th><th>Chasing</th><th>Status</th></tr></thead>
+<div class="surface">
+<table class="ledger">
+  <thead><tr><th>Client</th><th>Documents</th><th>Needs you</th><th>Chasing</th><th>Status</th></tr></thead>
   <tbody>
   <% for (const c of cases) { const pct = c.required_total ? Math.round(100 * c.required_done / c.required_total) : 0; %>
     <tr>
-      <td><a href="/cases/<%= c.id %>"><%= c.first_name %> <%= c.last_name %></a></td>
-      <td><%= c.title %><% if (c.lender) { %> <span class="muted">· <%= c.lender %></span><% } %></td>
-      <td><div class="bar" title="<%= c.required_done %> of <%= c.required_total %> required"><span style="width:<%= pct %>%"></span></div>
-          <span class="muted small"><%= c.required_done %>/<%= c.required_total %></span></td>
-      <td><% if (c.awaiting_review) { %><span class="pill warn"><%= c.awaiting_review %> to review</span><% } %>
-          <% if (c.rejected) { %><span class="pill bad"><%= c.rejected %> rejected</span><% } %></td>
-      <td class="small"><% if (c.status !== 'open') { %><span class="muted">–</span>
-          <% } else if (!c.chasing_started_at) { %><span class="muted">Not started</span>
-          <% } else if (c.chasing_stopped === 'limit_reached') { %><span class="pill bad">No reply after <%= c.reminders_sent %></span>
-          <% } else if (c.chasing_stopped) { %><span class="pill bad">Stopped</span>
-          <% } else if (c.reminders_paused) { %><span class="muted">Paused</span>
-          <% } else if (c.next_reminder_at) { %>Next <%= new Date(c.next_reminder_at).toLocaleDateString('en-IE', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Dublin' }) %>
-          <% } else { %><span class="muted">Waiting</span><% } %></td>
-      <td><span class="pill <%= c.status === 'complete' ? 'good' : '' %>"><%= c.status === 'complete' ? 'File complete' : c.status[0].toUpperCase() + c.status.slice(1) %></span></td>
+      <td class="client-cell"><a href="/cases/<%= c.id %>"><%= c.first_name %> <%= c.last_name %></a>
+        <span class="sub"><%= c.title %><% if (c.lender) { %>, <%= c.lender %><% } %></span></td>
+      <td><div class="meter" title="<%= c.required_done %> of <%= c.required_total %> required documents done"><span class="track"><span class="fill" style="width:<%= pct %>%"></span></span><span class="frac"><%= c.required_done %>/<%= c.required_total %></span></div></td>
+      <td><% if (c.awaiting_review) { %><span class="chip warn"><%= c.awaiting_review %> to review</span><% } %>
+          <% if (c.rejected) { %><span class="chip bad"><%= c.rejected %> rejected</span><% } %></td>
+      <td class="chasing-cell"><% if (c.status !== 'open') { %>–
+          <% } else if (!c.chasing_started_at) { %>Not started
+          <% } else if (c.chasing_stopped === 'limit_reached') { %><span class="chip bad">No reply after <%= c.reminders_sent %></span>
+          <% } else if (c.chasing_stopped) { %><span class="chip bad">Stopped</span>
+          <% } else if (c.reminders_paused) { %>Paused
+          <% } else if (c.next_reminder_at) { %>Next <strong><%= new Date(c.next_reminder_at).toLocaleDateString('en-IE', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Dublin' }) %></strong>
+          <% } else { %>Waiting<% } %></td>
+      <td><% if (c.status === 'complete') { %><span class="chip brass">File complete</span><% } else { %><span class="chip"><%= c.status[0].toUpperCase() + c.status.slice(1).replace('_', ' ') %></span><% } %></td>
     </tr>
   <% } %>
   </tbody>
 </table>
+</div>
 <% } %>
 <%- include('partials/foot') %>

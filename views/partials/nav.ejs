@@ -1,16 +1,17 @@
-<header class="topbar">
-  <a class="brand" href="/">Fileready</a>
-  <% if (user) { %>
-  <nav>
-    <a href="/">Cases</a>
-    <a href="/clients">Clients</a>
-    <a class="btn small" href="/clients/new">+ New client</a>
-  </nav>
-  <div class="who">
-    <span><%= user.full_name %> · <%= user.firm_name %></span>
-    <a href="/account/password">Password</a>
-    <form method="post" action="/logout"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link">Log out</button></form>
-  </div>
-  <% } %>
-</header>
-<main>
+<div class="shell">
+  <aside class="side">
+    <a class="wordmark" href="/"><%- include('mark') %><span>Fileready</span></a>
+    <nav aria-label="Main">
+      <a href="/" <%- (path === '/' || path.startsWith('/cases')) ? 'aria-current="page"' : '' %>>Cases</a>
+      <a href="/clients" <%- path.startsWith('/clients') && path !== '/clients/new' ? 'aria-current="page"' : '' %>>Clients</a>
+    </nav>
+    <div class="new"><a class="btn-new" href="/clients/new">+ New client</a></div>
+    <div class="who">
+      <div><strong><%= user.full_name %></strong><%= user.firm_name %></div>
+      <div class="acts">
+        <a href="/account/password">Password</a>
+        <form method="post" action="/logout"><input type="hidden" name="_csrf" value="<%= csrf %>"><button>Log out</button></form>
+      </div>
+    </div>
+  </aside>
+  <main class="main">

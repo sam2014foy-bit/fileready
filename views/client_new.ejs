@@ -1,16 +1,17 @@
 <%- include('partials/head', { title: 'New client' }) %>
 <%- include('partials/nav') %>
-<form method="post" action="/clients" class="card narrow">
+<a class="back" href="/clients">← Clients</a>
+<form method="post" action="/clients" class="surface form-surface">
   <h1>New client</h1>
-  <% if (error) { %><p class="error" role="alert"><%= error %></p><% } %>
+  <% if (error) { %><p class="notice error" role="alert"><%= error %></p><% } %>
   <input type="hidden" name="_csrf" value="<%= csrf %>">
   <div class="two">
-    <label>First name <input name="first_name" value="<%= values.first_name || '' %>" required></label>
-    <label>Last name <input name="last_name" value="<%= values.last_name || '' %>" required></label>
+    <label>First name <input name="first_name" value="<%= values.first_name || '' %>" autocomplete="off" required></label>
+    <label>Last name <input name="last_name" value="<%= values.last_name || '' %>" autocomplete="off" required></label>
   </div>
-  <label>Email <input type="email" name="email" value="<%= values.email || '' %>"></label>
-  <label>Mobile <input type="tel" name="phone" value="<%= values.phone || '' %>" placeholder="+353…"></label>
-  <p class="muted small">Email or mobile is needed so reminders can reach them.</p>
+  <label>Email <input type="email" name="email" value="<%= values.email || '' %>" autocomplete="off"></label>
+  <label>Mobile <input type="tel" name="phone" value="<%= values.phone || '' %>" placeholder="+353 87 …" autocomplete="off"></label>
+  <p class="hint">Fileready chases by email, so add an email address if you have one.</p>
   <button class="btn">Save and start a case</button>
 </form>
 <%- include('partials/foot') %>

@@ -69,6 +69,7 @@ export function createApp({ db, storage, mailer, config }) {
   app.use(async (req, res, next) => {
     res.locals.user = null;
     res.locals.flash = null;
+    res.locals.path = req.path;
     const token = req.cookies[SESSION_COOKIE];
     if (token && token.length < 100) {
       const [row] = await db.asApp((q) => q('SELECT * FROM session_resolve($1)', [sha256(token)]));
@@ -164,7 +165,14 @@ export function createApp({ db, storage, mailer, config }) {
         [filter]
       )
     );
-    res.render('dashboard', { cases, filter });
+    const [counts] = await inFirm(req, (q) =>
+      q(`SELECT count(*) FILTER (WHERE c.status = 'open')::int AS open,
+                count(*) FILTER (WHERE c.status = 'complete')::int AS complete,
+                count(*)::int AS all,
+                count(*) FILTER (WHERE c.status = 'open' AND p.awaiting_review > 0)::int AS review
+           FROM cases c JOIN case_progress p ON p.case_id = c.id`)
+    );
+    res.render('dashboard', { cases, filter, counts });
   });
 
   // ------------------------------------------------------------- clients

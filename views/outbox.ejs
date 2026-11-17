@@ -1,14 +1,14 @@
-<%- include('partials/head', { title: 'Outbox (dev)' }) %>
+<%- include('partials/head', { title: 'Outbox' }) %>
 <main class="outbox">
-  <h1>Emails sent (local only)</h1>
-  <p class="muted">On your computer, emails aren't really sent. They appear here so you can see exactly what clients would get.</p>
+  <h1>Emails sent</h1>
+  <p class="muted">Only on your computer. Emails aren't really sent here, so you can see exactly what clients would get.</p>
   <% if (!emails.length) { %><p>No emails yet.</p><% } %>
   <% for (const e of emails) { %>
-    <div class="card">
-      <p class="small muted"><%= new Date(e.sentAt).toLocaleString('en-IE') %> · to <%= e.toName %> &lt;<%= e.to %>&gt; · from <%= e.fromName %><% if (e.replyTo) { %> · replies go to <%= e.replyTo %><% } %></p>
-      <h3><%= e.subject %></h3>
+    <section class="surface" style="margin-top:20px"><div class="surface-body">
+      <p class="small muted" style="margin:0 0 6px"><%= new Date(e.sentAt).toLocaleString('en-IE') %>. To <%= e.toName %> &lt;<%= e.to %>&gt;, from <%= e.fromName %><% if (e.replyTo) { %>, replies to <%= e.replyTo %><% } %></p>
+      <h2><%= e.subject %></h2>
       <pre><%= e.text %></pre>
-    </div>
+    </div></section>
   <% } %>
 </main>
 </body></html>

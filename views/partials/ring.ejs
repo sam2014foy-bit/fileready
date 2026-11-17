@@ -1,0 +1,12 @@
+<%
+  const sz = locals.size || 120, sw = locals.stroke || 6, r = (sz - sw) / 2, c = 2 * Math.PI * r;
+  const pct = locals.total ? Math.min(1, locals.done / locals.total) : 0;
+%>
+<div class="ring" style="width:<%= sz %>px;height:<%= sz %>px">
+  <svg width="<%= sz %>" height="<%= sz %>" viewBox="0 0 <%= sz %> <%= sz %>" aria-hidden="true">
+    <circle class="track" cx="<%= sz / 2 %>" cy="<%= sz / 2 %>" r="<%= r %>" fill="none" stroke-width="<%= sw %>"/>
+    <% if (pct > 0) { %><circle class="arc" cx="<%= sz / 2 %>" cy="<%= sz / 2 %>" r="<%= r %>" fill="none" stroke-width="<%= sw %>"
+      stroke-dasharray="<%= c.toFixed(2) %>" stroke-dashoffset="<%= (c * (1 - pct)).toFixed(2) %>" style="--c:<%= c.toFixed(2) %>"/><% } %>
+  </svg>
+  <div class="label"><b class="num"><%= locals.done %>/<%= locals.total %></b><span><%= locals.sub || 'documents' %></span></div>
+</div>
