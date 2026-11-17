@@ -26,7 +26,7 @@
   if (justUploaded && /^[0-9a-f-]{36}$/.test(justUploaded)) {
     var row = document.querySelector('[data-rid="' + justUploaded + '"]');
     if (row) {
-      gsap.fromTo(row, { backgroundColor: 'rgba(169, 131, 76, .18)' }, { backgroundColor: 'rgba(169, 131, 76, 0)', duration: 1.6, ease: 'power2.out', delay: .2 });
+      gsap.fromTo(row, { backgroundColor: 'rgba(14, 106, 81, .14)' }, { backgroundColor: 'rgba(14, 106, 81, 0)', duration: 1.6, ease: 'power2.out', delay: .2 });
       var mark = row.querySelector('.done-mark');
       if (mark) gsap.from(mark, { x: -8, autoAlpha: 0, duration: .5, ease: 'power2.out', delay: .2 });
     }

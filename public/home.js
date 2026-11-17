@@ -10,7 +10,7 @@
   gsap.registerPlugin(ScrollTrigger);
 
   // Statuses per step for the 7 checklist items: r requested, u received (to check), a accepted, x sent back.
-  var CHIP = { r: ['', 'Requested'], u: ['brass', 'To check'], a: ['good', 'Accepted'], x: ['bad', 'Sent back'] };
+  var CHIP = { r: ['waiting', 'Requested'], u: ['info', 'To check'], a: ['good', 'Accepted'], x: ['returned', 'Sent back'] };
   var STATES = [
     { s: 'rrrrrrr', e: 'Email sent to Niamh with 7 documents' },
     { s: 'uuurrrr', e: 'Niamh uploaded 3 documents' },
@@ -40,7 +40,7 @@
       chip.className = 'chip ' + CHIP[code][0];
       chip.textContent = CHIP[code][1];
       if (prev && prev[k] !== code && !reduce) {
-        gsap.fromTo(li, { backgroundColor: 'rgba(169, 131, 76, .16)' }, { backgroundColor: 'rgba(169, 131, 76, 0)', duration: 1.2, ease: 'power2.out' });
+        gsap.fromTo(li, { backgroundColor: 'rgba(14, 106, 81, .12)' }, { backgroundColor: 'rgba(14, 106, 81, 0)', duration: 1.2, ease: 'power2.out' });
         gsap.fromTo(chip, { scale: .85 }, { scale: 1, duration: .5, ease: 'back.out(3)' });
       }
     });

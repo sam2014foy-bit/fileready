@@ -111,3 +111,73 @@
 .h-end .h-note { margin-top: 16px; }
 .h-step-cta { margin-top: 28px !important; }
 .h-step-cta .btn { color: #fff; height: 52px; padding: 0 26px; font-size: 16px; }
+
+/* ======================================================================
+   Fileready design system: brand chrome for the marketing page
+   ====================================================================== */
+.home { background: var(--surface); overflow-x: clip; }
+.home h1, .home h2 { font-family: var(--display); font-weight: 700; }
+
+/* Top bar */
+.h-bar { background: rgba(13, 38, 32, .94); color: var(--on-evergreen); border-bottom-color: transparent; }
+.h-bar.scrolled { border-bottom-color: rgba(234, 244, 239, .12); }
+.h-word { color: var(--on-evergreen); font: 700 24px/1 var(--display); letter-spacing: -0.02em; }
+.h-nav a:not(.btn) { color: var(--on-evergreen-muted); }
+.h-nav a:not(.btn):hover { color: var(--on-evergreen); }
+
+/* On evergreen, the action is mint with evergreen text */
+.on-evergreen .btn { background: var(--mint); border-color: var(--mint); color: var(--evergreen); }
+.on-evergreen .btn:hover { background: #8AE6C2; border-color: #8AE6C2; color: var(--evergreen); }
+.on-evergreen :focus-visible { outline-color: #7DB3FF; }
+
+/* Hero: a full-width evergreen band behind the headline; the case card floats over it */
+.h-hero { position: relative; color: var(--on-evergreen); }
+/* Full-bleed band without widening the page: a shadow spread, clipped to the band */
+.h-hero { box-shadow: 0 0 0 100vmax var(--evergreen); clip-path: inset(-80px -100vmax 0 -100vmax); background: var(--evergreen); }
+.h-story { position: relative; z-index: 0; }
+.h-hero h1 { font: 700 clamp(48px, 6vw, 84px)/0.98 var(--display); letter-spacing: -0.03em; color: var(--on-evergreen); max-width: 12ch; }
+.h-hero h1 em { font-style: normal; color: var(--mint); display: block; }
+.h-lede { color: var(--on-evergreen); opacity: .92; font-size: clamp(17px, 1.5vw, 20px); line-height: 1.55; max-width: 34em; }
+.h-plain { color: var(--on-evergreen); text-decoration-color: var(--mint); }
+.h-hero .h-note, .h-hero .h-for { color: var(--on-evergreen-muted); }
+.h-hero .h-for { margin-top: 40px; }
+#how { border-top: 0; }
+
+/* The case card: a floating preview, so it may carry the raised shadow */
+.h-card { border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-raised); }
+.h-client { font: 700 24px/1.15 var(--display); letter-spacing: -0.015em; }
+.h-ring .track { stroke: var(--surface-sunken); }
+.h-ring .arc { stroke: var(--emerald); }
+.h-ring b { font: 700 20px/1 var(--display); }
+.h-event { background: var(--emerald-soft); color: var(--emerald); }
+.h-dot { background: var(--emerald); }
+.h-event.done { background: var(--success-soft); color: var(--success); }
+.h-event.done .h-dot { background: var(--success); }
+
+/* Steps */
+.h-when { color: var(--emerald); font-family: var(--mono); font-size: 12.5px; font-weight: 500; letter-spacing: 0; }
+.h-step { border-left-color: var(--line); }
+.h-step.on { border-left-color: var(--emerald); }
+.h-step h2 { font: 700 clamp(26px, 2.6vw, 36px)/1.15 var(--display); letter-spacing: -0.02em; }
+
+/* Working-surface bands */
+.h-band h2, .h-trust h2 { font: 700 clamp(28px, 3vw, 40px)/1.12 var(--display); letter-spacing: -0.02em; color: var(--ink); }
+.h-trust { background: var(--surface-raised); color: var(--ink); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.h-trust h2 { color: var(--ink); }
+.h-facts dt { font: 700 19px/26px var(--display); color: var(--ink); letter-spacing: -0.01em; }
+.h-facts dd { color: var(--ink-muted); }
+.h-plain.light { color: var(--emerald); text-decoration-color: var(--emerald); }
+
+/* Closing band */
+.h-end { background: var(--evergreen); color: var(--on-evergreen); }
+.h-end h2 { font: 700 clamp(30px, 3.6vw, 48px)/1.1 var(--display); letter-spacing: -0.025em; color: var(--on-evergreen); }
+.h-end .h-note { color: var(--on-evergreen-muted); }
+.h-foot { border-top: 0; }
+.h-step-cta .btn { color: var(--on-emerald); }
+
+@media (max-width: 900px) {
+  .h-hero { padding-bottom: 48px; }
+  .h-hero { clip-path: inset(-72px -100vmax 0 -100vmax); }
+  .h-stage { background: linear-gradient(var(--surface) 85%, rgba(243, 246, 244, 0)); }
+}
+.h-hero { position: relative; }

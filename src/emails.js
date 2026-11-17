@@ -68,22 +68,22 @@ export function reminderEmail({ kind, firstName, firmName, caseTitle, adviserNam
 
   const li = (i) =>
     i.status === 'rejected'
-      ? `<li><strong>${esc(i.label)}</strong> – <span style="color:#9A3424">please upload again: ${esc(i.rejected_reason)}</span></li>`
-      : `<li><strong>${esc(i.label)}</strong>${i.help_text ? ` <span style="color:#5E6B70">(${esc(i.help_text)})</span>` : ''}${i.required ? '' : ' <span style="color:#5E6B70">– if it applies</span>'}</li>`;
-  const html = `<!doctype html><html><body style="margin:0;background:#F3F4F1;padding:24px 12px">
+      ? `<li><strong>${esc(i.label)}</strong> – <span style="color:#9B1E2B">please upload again: ${esc(i.rejected_reason)}</span></li>`
+      : `<li><strong>${esc(i.label)}</strong>${i.help_text ? ` <span style="color:#56685F">(${esc(i.help_text)})</span>` : ''}${i.required ? '' : ' <span style="color:#56685F">– if it applies</span>'}</li>`;
+  const html = `<!doctype html><html><body style="margin:0;background:#F3F6F4;padding:24px 12px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border:1px solid #E3E7E4;border-radius:14px">
-<tr><td style="padding:22px 28px;border-bottom:1px solid #E3E7E4;font:500 18px Georgia,'Times New Roman',serif;color:#14222B">${esc(firmName)}</td></tr>
-<tr><td style="padding:28px;font:15px/1.6 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#14222B">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border:1px solid #DAE2DD;border-radius:14px">
+<tr><td style="padding:22px 28px;border-bottom:1px solid #DAE2DD;font:700 18px -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:-0.01em;color:#13201C">${esc(firmName)}</td></tr>
+<tr><td style="padding:28px;font:15px/1.6 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#13201C">
 <p style="margin:0 0 14px">Hi ${esc(firstName)},</p>
 <p style="margin:0 0 18px">${esc(intro)}</p>
 <ul style="margin:0 0 24px;padding-left:20px">${[...rejected, ...missing].map(li).join('')}</ul>
 ${due ? `<p style="margin:0 0 18px"><strong>Please send them by ${esc(due)}.</strong></p>` : ''}
-<p style="margin:0 0 24px"><a href="${esc(link)}" style="background:#0F3A44;color:#FFFFFF;padding:13px 22px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">Upload documents</a></p>
-<p style="margin:0 0 18px;color:#5E6B70;font-size:14px">This link is private to you and works for ${linkDays} days. ${esc(replyLine)}</p>
-<p style="margin:0">Thanks,<br>${esc(adviserName ? `${adviserName}` : firmName)}${adviserName ? `<br><span style="color:#5E6B70">${esc(firmName)}</span>` : ''}</p>
+<p style="margin:0 0 24px"><a href="${esc(link)}" style="background:#0E6A51;color:#FFFFFF;padding:13px 22px;border-radius:999px;text-decoration:none;font-weight:600;display:inline-block">Upload documents</a></p>
+<p style="margin:0 0 18px;color:#56685F;font-size:14px">This link is private to you and works for ${linkDays} days. ${esc(replyLine)}</p>
+<p style="margin:0">Thanks,<br>${esc(adviserName ? `${adviserName}` : firmName)}${adviserName ? `<br><span style="color:#56685F">${esc(firmName)}</span>` : ''}</p>
 </td></tr>
-<tr><td style="padding:16px 28px;border-top:1px solid #E3E7E4;font:12px/1.5 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#5E6B70">Files you upload are sent securely to ${esc(firmName)} and stored in Ireland.</td></tr>
+<tr><td style="padding:16px 28px;border-top:1px solid #DAE2DD;font:12px/1.5 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#56685F">Files you upload are sent securely to ${esc(firmName)} and stored in Ireland.</td></tr>
 </table></td></tr></table>
 </body></html>`;
 
@@ -93,16 +93,16 @@ ${due ? `<p style="margin:0 0 18px"><strong>Please send them by ${esc(due)}.</st
 
 // Shared frame for Fileready's own emails to staff.
 function frame(heading, bodyHtml, footer) {
-  return `<!doctype html><html><body style="margin:0;background:#F3F4F1;padding:24px 12px">
+  return `<!doctype html><html><body style="margin:0;background:#F3F6F4;padding:24px 12px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border:1px solid #E3E7E4;border-radius:14px">
-<tr><td style="padding:22px 28px;border-bottom:1px solid #E3E7E4;font:500 18px Georgia,'Times New Roman',serif;color:#14222B">Fileready</td></tr>
-<tr><td style="padding:28px;font:15px/1.6 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#14222B">
-<h1 style="margin:0 0 16px;font:500 24px/1.25 Georgia,'Times New Roman',serif">${esc(heading)}</h1>${bodyHtml}</td></tr>
-<tr><td style="padding:16px 28px;border-top:1px solid #E3E7E4;font:12px/1.5 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#5E6B70">${esc(footer)}</td></tr>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border:1px solid #DAE2DD;border-radius:14px">
+<tr><td style="padding:22px 28px;border-bottom:1px solid #DAE2DD;font:700 18px -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:-0.01em;color:#0E6A51">fileready</td></tr>
+<tr><td style="padding:28px;font:15px/1.6 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#13201C">
+<h1 style="margin:0 0 16px;font:700 24px/1.25 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:-0.015em">${esc(heading)}</h1>${bodyHtml}</td></tr>
+<tr><td style="padding:16px 28px;border-top:1px solid #DAE2DD;font:12px/1.5 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#56685F">${esc(footer)}</td></tr>
 </table></td></tr></table></body></html>`;
 }
-const button = (link, label) => `<p style="margin:24px 0"><a href="${esc(link)}" style="background:#0F3A44;color:#FFFFFF;padding:13px 22px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">${esc(label)}</a></p>`;
+const button = (link, label) => `<p style="margin:24px 0"><a href="${esc(link)}" style="background:#0E6A51;color:#FFFFFF;padding:13px 22px;border-radius:999px;text-decoration:none;font-weight:600;display:inline-block">${esc(label)}</a></p>`;
 
 export function accountEmail({ purpose, name, firmName, inviter, link }) {
   if (purpose === 'invite') {
@@ -110,13 +110,13 @@ export function accountEmail({ purpose, name, firmName, inviter, link }) {
     return {
       subject: `You're invited to ${firmName} on Fileready`,
       text: `Hi ${name},\n\n${intro}\n\nSet your password here: ${link}\n\nThis link works for 7 days.`,
-      html: frame('Set up your login', `<p style="margin:0 0 12px">Hi ${esc(name)},</p><p style="margin:0">${esc(intro)}</p>${button(link, 'Set your password')}<p style="margin:0;color:#5E6B70;font-size:14px">This link works for 7 days.</p>`, 'If you weren\'t expecting this, you can ignore it.'),
+      html: frame('Set up your login', `<p style="margin:0 0 12px">Hi ${esc(name)},</p><p style="margin:0">${esc(intro)}</p>${button(link, 'Set your password')}<p style="margin:0;color:#56685F;font-size:14px">This link works for 7 days.</p>`, 'If you weren\'t expecting this, you can ignore it.'),
     };
   }
   return {
     subject: 'Reset your Fileready password',
     text: `Hi ${name},\n\nSomeone asked to reset the password for your ${firmName} login on Fileready. If it was you, set a new one here: ${link}\n\nThis link works for 1 hour. If it wasn't you, ignore this email and your password stays the same.`,
-    html: frame('Reset your password', `<p style="margin:0 0 12px">Hi ${esc(name)},</p><p style="margin:0">Someone asked to reset the password for your ${esc(firmName)} login. If it was you, set a new one below.</p>${button(link, 'Set a new password')}<p style="margin:0;color:#5E6B70;font-size:14px">This link works for 1 hour.</p>`, 'If you didn\'t ask for this, ignore this email and your password stays the same.'),
+    html: frame('Reset your password', `<p style="margin:0 0 12px">Hi ${esc(name)},</p><p style="margin:0">Someone asked to reset the password for your ${esc(firmName)} login. If it was you, set a new one below.</p>${button(link, 'Set a new password')}<p style="margin:0;color:#56685F;font-size:14px">This link works for 1 hour.</p>`, 'If you didn\'t ask for this, ignore this email and your password stays the same.'),
   };
 }
 

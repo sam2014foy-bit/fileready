@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-<%- include('partials/meta', { fullTitle: 'Fileready – Document chasing for Irish mortgage brokers', description: 'Fileready sends your mortgage clients a checklist and a secure upload link, then reminds them about what\'s missing until the file is complete. Built in Ireland.', index: true }) %>
-  <link rel="preload" href="/static/fonts/newsreader-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/static/fonts/hanken-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<%- include('partials/meta', { fullTitle: 'Fileready – Every document in. Without the chasing.', description: 'Fileready sends your mortgage clients a checklist and a secure upload link, then reminds them about what\'s missing until the file is complete. Built in Ireland.', index: true }) %>
+  <link rel="preload" href="/static/fonts/schibsted-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/app.css?v=<%= v %>">
   <link rel="stylesheet" href="/static/home.css?v=<%= v %>">
 </head>
@@ -28,7 +28,7 @@
   const cta = (where) => primary.href === '/login' ? primary.href : primary.href + '?from=' + where;
 %>
 <body class="home">
-<header class="h-bar">
+<header class="h-bar on-evergreen">
   <a class="h-word" href="/"><%- include('partials/mark') %><span>Fileready</span></a>
   <nav class="h-nav" aria-label="Main">
     <a href="#how">How it works</a>
@@ -41,15 +41,15 @@
 <main>
   <section class="h-story">
     <div class="h-steps">
-      <div class="h-hero">
-    <h1>Stop chasing payslips.</h1>
+      <div class="h-hero on-evergreen">
+    <h1>Every document in. <em>Without the chasing.</em></h1>
     <p class="h-lede">Fileready sends your mortgage clients a checklist and a secure upload link, then reminds them about what's still missing until the file is complete. You spend the time advising.</p>
     <div class="h-actions">
       <a class="btn" href="<%= cta('hero') %>"><%= primary.label %></a>
       <a class="h-plain" href="#how">See how it works</a>
     </div>
     <% if (primary.note) { %><p class="h-note"><%= primary.note %></p><% } %>
-    <p class="h-for">Built in Ireland for Irish mortgage brokers. Documents are stored in Ireland.</p>
+    <p class="h-for">Built in Ireland for Irish mortgage brokers. Documents are stored in Ireland and encrypted.</p>
       </div>
 
       <% steps.forEach(([when, head, body], i) => { %>
@@ -77,7 +77,7 @@
         <p class="h-event"><span class="h-dot"></span><span class="h-event-text">Email sent to Niamh with 7 documents</span></p>
         <ul class="h-items">
           <% items.forEach((label, i) => { %>
-          <li data-item="<%= i %>"><span class="h-label"><%= label %></span><span class="chip">Requested</span></li>
+          <li data-item="<%= i %>"><span class="h-label"><%= label %></span><span class="chip waiting">Requested</span></li>
           <% }) %>
         </ul>
       </div>
@@ -114,7 +114,7 @@
     </div>
   </section>
 
-  <section class="h-end">
+  <section class="h-end on-evergreen">
     <h2>Your next file could chase itself.</h2>
     <a class="btn" href="<%= cta('footer') %>"><%= primary.label %></a>
     <% if (primary.note) { %><p class="h-note"><%= primary.note %></p><% } %>

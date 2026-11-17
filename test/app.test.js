@@ -59,7 +59,7 @@ test('pages need a login; logged-out visitors to / get the public home page', as
   assert.equal(res.headers.location, '/login');
   const home = await request(app).get('/');
   assert.equal(home.status, 200);
-  assert.match(home.text, /Stop chasing payslips/);
+  assert.match(home.text, /Every document in\. <em>Without the chasing\.<\/em>/);
   assert.ok(!home.text.includes('noindex'), 'home page can be found by search engines');
   const gsap = await request(app).get('/static/vendor/gsap/gsap.min.js');
   assert.equal(gsap.status, 200);

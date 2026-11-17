@@ -34,8 +34,8 @@
         <span class="sub"><%= c.title %><% if (c.lender) { %>, <%= c.lender %><% } %></span>
         <% if (c.due_date && c.status === 'open') { const d = dateOnly(c.due_date); %><span class="chip <%= d < today ? 'bad' : 'plain' %>" style="margin-top:6px"><%= d < today ? 'Overdue' : 'Due' %> <%= formatDue(d).replace(/^\w+ /, '') %></span><% } %></td>
       <td><div class="meter" title="<%= c.required_done %> of <%= c.required_total %> required documents done"><span class="track"><span class="fill" style="width:<%= pct %>%"></span></span><span class="frac"><%= c.required_done %>/<%= c.required_total %></span></div></td>
-      <td><% if (c.awaiting_review) { %><span class="chip warn"><%= c.awaiting_review %> to review</span><% } %>
-          <% if (c.rejected) { %><span class="chip bad"><%= c.rejected %> rejected</span><% } %></td>
+      <td><% if (c.awaiting_review) { %><span class="chip info"><%= c.awaiting_review %> to review</span><% } %>
+          <% if (c.rejected) { %><span class="chip returned"><%= c.rejected %> sent back</span><% } %></td>
       <td class="chasing-cell"><% if (c.status !== 'open') { %>–
           <% } else if (!c.chasing_started_at) { %>Not started
           <% } else if (c.chasing_stopped === 'limit_reached') { %><span class="chip bad">No reply after <%= c.reminders_sent %></span>

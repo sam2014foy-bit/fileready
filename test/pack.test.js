@@ -429,7 +429,7 @@ test('privacy, terms and DPA pages are public, use the configured business detai
 test('public pages have titles, descriptions, canonical and social tags; private pages stay out of search', async () => {
   const site = createApp({ db, storage: localDiskStorage(storageDir), mailer, config: { baseUrl: 'https://fileready.example', contactEmail: 'hello@fileready.test' } });
   const home = (await request(site).get('/')).text;
-  assert.match(home, /<title>Fileready – Document chasing for Irish mortgage brokers<\/title>/);
+  assert.match(home, /<title>Fileready – Every document in. Without the chasing.<\/title>/);
   assert.match(home, /<meta name="description" content="Fileready sends your mortgage clients/);
   assert.match(home, /<meta name="robots" content="index, follow">/);
   assert.match(home, /<link rel="canonical" href="https:\/\/fileready\.example\/">/);

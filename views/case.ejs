@@ -5,8 +5,8 @@
   const required = requests.filter((r) => r.required);
   const done = required.filter((r) => ['accepted', 'waived'].includes(r.status)).length;
   const toReview = requests.filter((r) => r.status === 'received').length;
-  const statusChip = { accepted: 'good', waived: 'good', received: 'warn', rejected: 'bad' };
-  const statusLabel = { requested: 'Requested', received: 'To review', accepted: 'Accepted', rejected: 'Rejected', waived: 'Not needed' };
+  const statusChip = { requested: 'waiting', accepted: 'good', waived: 'good', received: 'info', rejected: 'returned' };
+  const statusLabel = { requested: 'Requested', received: 'To review', accepted: 'Accepted', rejected: 'Sent back', waived: 'Not needed' };
   const actionLabel = (a) => a.replace('.', ' ').replace('_', ' ');
 %>
 <a class="back" href="/">← Cases</a>
@@ -114,7 +114,7 @@
         <% if (r.status === 'rejected') { %><div class="note bad-text">Rejected: <%= r.rejected_reason %></div><% } %>
         <% for (const d of r.documents) { %>
           <div class="file"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5h5l3 3v8H3z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
-            <a href="/documents/<%= d.id %>"><%= d.original_filename %></a>
+            <a class="file-name" href="/documents/<%= d.id %>"><%= d.original_filename %></a>
             <span class="muted num"><%= d.size_bytes < 1048576 ? Math.max(1, Math.round(d.size_bytes / 1024)) + ' KB' : (d.size_bytes / 1048576).toFixed(1) + ' MB' %>, <%= new Date(d.uploaded_at).toLocaleString('en-IE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Dublin' }) %></span>
             <form method="post" action="/documents/<%= d.id %>/remove" class="inline-form"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link danger" title="Delete this file, e.g. if the client uploaded the wrong one">Remove</button></form></div>
         <% } %>
@@ -182,7 +182,7 @@
     <div class="surface-body">
       <ul class="plain history">
       <% for (const h of history) { %>
-        <li><span class="t"><%= fmt(h.created_at) %></span>
+        <li><span class="t ref"><%= fmt(h.created_at) %></span>
           <span><%= h.actor_type === 'client' ? 'Client' : (h.full_name || 'Fileready') %>: <%= actionLabel(h.action) %><% if (h.details && h.details.reason) { %>, <%= h.details.reason %><% } %></span></li>
       <% } %>
       </ul>

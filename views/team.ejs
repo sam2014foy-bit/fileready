@@ -15,7 +15,7 @@
             <% for (const [k, l] of [['owner', 'Owner'], ['adviser', 'Adviser'], ['admin_staff', 'Admin staff']]) { %><option value="<%= k %>" <%= t.role === k ? 'selected' : '' %>><%= l %></option><% } %>
           </select><button class="link">Change</button></form><% } %>
         <% if (t.two_step) { %><span class="sub small muted" style="display:block;margin-top:4px">Two-step login on</span><% } %></td>
-      <td><% if (t.disabled_at) { %><span class="chip">No access</span><% } else if (!t.has_password) { %><span class="chip warn">Invited</span><% } else { %><span class="chip good">Active</span><% } %>
+      <td><% if (t.disabled_at) { %><span class="chip">No access</span><% } else if (!t.has_password) { %><span class="chip waiting">Invited</span><% } else { %><span class="chip good">Active</span><% } %>
         <% if (t.last_login_at) { %><span class="sub small muted" style="display:block;margin-top:4px">Last in <%= new Date(t.last_login_at).toLocaleDateString('en-IE') %></span><% } %></td>
       <td style="text-align:right">
         <% if (!me) { %><div class="actions" style="display:inline-flex;gap:16px">

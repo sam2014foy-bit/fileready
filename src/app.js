@@ -302,7 +302,7 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
   app.get('/site.webmanifest', (req, res) => {
     res.type('application/manifest+json').send(JSON.stringify({
       name: 'Fileready', short_name: 'Fileready', start_url: '/', display: 'standalone',
-      background_color: '#F3F4F1', theme_color: '#0F3A44',
+      background_color: '#F3F6F4', theme_color: '#0D2620',
       icons: [{ src: '/static/icon-192.png', sizes: '192x192', type: 'image/png' }, { src: '/static/icon-512.png', sizes: '512x512', type: 'image/png' }],
     }));
   });
