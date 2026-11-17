@@ -38,18 +38,24 @@ export function pgliteDriver(pglite) {
 }
 
 export function createDb(driver) {
-  async function scoped(firmId, fn) {
+  async function scoped(firmId, fn, { userId = null, restrict = false } = {}) {
     return driver.transaction(async (q) => {
       await q('SET LOCAL ROLE fileready_app');
-      await q(`SELECT set_config('app.firm_id', $1, true)`, [firmId ?? '']);
+      await q(
+        `SELECT set_config('app.firm_id', $1, true), set_config('app.user_id', $2, true), set_config('app.restrict', $3, true)`,
+        [firmId ?? '', userId ?? '', restrict ? '1' : '']
+      );
       return fn(q);
     });
   }
   return {
-    /** Run fn(q) with access to one firm's data only. */
-    asFirm(firmId, fn) {
+    /**
+     * Run fn(q) with access to one firm's data only. With restrict, an adviser
+     * also sees only the cases they advise (firms can switch this on).
+     */
+    asFirm(firmId, fn, opts) {
       if (!firmId) throw new Error('asFirm needs a firm id');
-      return scoped(firmId, fn);
+      return scoped(firmId, fn, opts);
     },
     /** Run fn(q) with no firm: only the login/session/link lookup functions work. */
     asApp(fn) {

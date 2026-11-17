@@ -7,10 +7,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { audit } from './db.js';
 import { sendCaseReminder, runReminders } from './reminders.js';
-import { accountEmail, uploadAlertEmail } from './emails.js';
+import { accountEmail, uploadAlertEmail, formatDue, dateOnly } from './emails.js';
+import { runDaily } from './daily.js';
+import QRCode from 'qrcode';
+import { ZipArchive } from 'archiver';
 import {
   verifyPassword, burnPasswordCheck, hashPassword, MIN_PASSWORD_LENGTH, randomToken, sha256,
-  csrfTokenFor, safeEqual, createLoginLimiter, detectFileType,
+  csrfTokenFor, safeEqual, createLoginLimiter, detectFileType, newTotpSecret, verifyTotp, totpUri,
+  encryptSecret, decryptSecret, newRecoveryCodes, normaliseRecovery, normalisePhone,
 } from './security.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -24,8 +28,11 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
  * @param {{put: Function, get: Function}} opts.storage
  * @param {object} opts.config  baseUrl, secureCookies, sessionHours, linkDays
  */
-export function createApp({ db, storage, mailer, config }) {
-  const cfg = { sessionHours: 12, linkDays: 14, secureCookies: false, remindersSecret: null, devOutbox: false, ...config };
+export function createApp({ db, storage, mailer, sms = null, stripe = null, config }) {
+  const cfg = {
+    sessionHours: 12, linkDays: 14, secureCookies: false, remindersSecret: null, devOutbox: false,
+    appSecret: null, allowSignup: false, trialDays: 30, stripePriceId: null, stripeWebhookSecret: null, ...config,
+  };
   const app = express();
   const limiter = createLoginLimiter();
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 5 } });
@@ -49,7 +56,35 @@ export function createApp({ db, storage, mailer, config }) {
   app.post('/internal/reminders/run', async (req, res) => {
     const auth = req.get('authorization') || '';
     if (!cfg.remindersSecret || !safeEqual(auth, `Bearer ${cfg.remindersSecret}`)) return res.status(401).json({ error: 'unauthorised' });
-    res.json(await runReminders({ db, mailer, baseUrl: cfg.baseUrl }));
+    res.json(await runReminders({ db, mailer, sms, baseUrl: cfg.baseUrl }));
+  });
+
+  // Called once a day by the scheduler: morning summaries and retention clean-up.
+  app.post('/internal/daily/run', async (req, res) => {
+    const auth = req.get('authorization') || '';
+    if (!cfg.remindersSecret || !safeEqual(auth, `Bearer ${cfg.remindersSecret}`)) return res.status(401).json({ error: 'unauthorised' });
+    res.json(await runDaily({ db, mailer, storage, baseUrl: cfg.baseUrl }));
+  });
+
+  // Stripe tells us about payments here. Needs the raw body to check Stripe's signature.
+  app.post('/stripe/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (req, res) => {
+    if (!stripe || !cfg.stripeWebhookSecret) return res.status(404).end();
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(req.body, req.get('stripe-signature') || '', cfg.stripeWebhookSecret);
+    } catch {
+      return res.status(400).send('bad signature');
+    }
+    const map = { active: 'active', trialing: 'active', past_due: 'past_due', unpaid: 'past_due', incomplete: 'past_due', canceled: 'cancelled', incomplete_expired: 'cancelled' };
+    const o = event.data.object;
+    if (event.type === 'checkout.session.completed' && o.mode === 'subscription') {
+      const firmId = UUID.test(o.client_reference_id || '') ? o.client_reference_id : null;
+      if (firmId) await db.asApp((q) => q('SELECT billing_update($1, $2, $3, $4)', [firmId, o.customer, o.subscription, 'active']));
+    } else if (event.type.startsWith('customer.subscription.') && map[o.status]) {
+      const firmId = UUID.test(o.metadata?.firm_id || '') ? o.metadata.firm_id : null;
+      await db.asApp((q) => q('SELECT billing_update($1, $2, $3, $4)', [firmId, o.customer, o.id, map[o.status]]));
+    }
+    res.json({ received: true });
   });
 
   if (cfg.devOutbox && mailer.outbox) {
@@ -71,14 +106,23 @@ export function createApp({ db, storage, mailer, config }) {
     res.locals.user = null;
     res.locals.flash = null;
     res.locals.path = req.path;
+    res.locals.allowSignup = cfg.allowSignup; res.locals.dateOnly = dateOnly; res.locals.formatDue = formatDue;
+    res.locals.billingBanner = null;
     const token = req.cookies[SESSION_COOKIE];
     if (token && token.length < 100) {
       const [row] = await db.asApp((q) => q('SELECT * FROM session_resolve($1)', [sha256(token)]));
-      if (row) {
+      if (row && row.mfa_pending) {
+        // Password checked, second step still to do: only /login/2fa is open to this session.
+        req.pendingMfa = row;
+        req.sessionToken = token;
+      } else if (row) {
         req.user = row;
         req.sessionToken = token;
         res.locals.user = row;
         res.locals.csrf = csrfTokenFor(token);
+        const trialOver = row.billing_status === 'trial' && row.trial_ends_at && new Date(row.trial_ends_at) < new Date();
+        res.locals.billingBanner = row.role === 'owner' && stripe && (trialOver || row.billing_status === 'past_due')
+          ? (row.billing_status === 'past_due' ? 'Your last payment didn\'t go through.' : 'Your free trial has ended.') : null;
       }
     }
     next();
@@ -89,7 +133,13 @@ export function createApp({ db, storage, mailer, config }) {
     req.user && safeEqual(req.body?._csrf ?? '', csrfTokenFor(req.sessionToken)) ? next() : res.status(403).send('Forbidden');
   const checkId = (...names) => (req, res, next) =>
     names.every((n) => UUID.test(req.params[n])) ? next() : res.status(404).render('error', { message: 'Not found.' });
-  const inFirm = (req, fn) => db.asFirm(req.user.firm_id, fn);
+  const inFirm = (req, fn) => db.asFirm(req.user.firm_id, fn, {
+    userId: req.user.user_id,
+    restrict: req.user.role === 'adviser' && req.user.advisers_see_all === false,
+  });
+  const setSessionCookie = (res, token) => res.cookie(SESSION_COOKIE, token, {
+    httpOnly: true, sameSite: 'strict', secure: cfg.secureCookies, maxAge: cfg.sessionHours * 3600 * 1000, path: '/',
+  });
   const actor = (req) => ({ firmId: req.user.firm_id, actorType: 'user', userId: req.user.user_id, ip: req.ip });
 
   // ---------------------------------------------------------------- auth
@@ -114,14 +164,16 @@ export function createApp({ db, storage, mailer, config }) {
     }
     limiter.reset(key);
     const token = randomToken();
-    await db.asApp((q) => q('SELECT session_create($1, $2, $3)', [sha256(token), found.user_id, cfg.sessionHours]));
-    await db.asFirm(found.firm_id, (q) =>
-      audit(q, { firmId: found.firm_id, actorType: 'user', userId: found.user_id, action: 'user.login', entityType: 'user', entityId: found.user_id, ip: req.ip })
-    );
-    res.cookie(SESSION_COOKIE, token, {
-      httpOnly: true, sameSite: 'strict', secure: cfg.secureCookies, maxAge: cfg.sessionHours * 3600 * 1000, path: '/',
-    });
-    res.redirect('/');
+    const [{ two_step: twoStep }] = await db.asFirm(found.firm_id, (q) =>
+      q('SELECT totp_enabled_at IS NOT NULL AS two_step FROM users WHERE id = $1', [found.user_id]));
+    await db.asApp((q) => q('SELECT session_create_v2($1, $2, $3, $4)', [sha256(token), found.user_id, cfg.sessionHours, twoStep]));
+    if (!twoStep) {
+      await db.asFirm(found.firm_id, (q) =>
+        audit(q, { firmId: found.firm_id, actorType: 'user', userId: found.user_id, action: 'user.login', entityType: 'user', entityId: found.user_id, ip: req.ip })
+      );
+    }
+    setSessionCookie(res, token);
+    res.redirect(twoStep ? '/login/2fa' : '/');
   });
 
   app.post('/logout', requireUser, requireCsrf, async (req, res) => {
@@ -131,6 +183,17 @@ export function createApp({ db, storage, mailer, config }) {
   });
 
   app.get('/account/password', requireUser, (req, res) => res.render('password', { error: null, done: false }));
+
+  app.get('/account', requireUser, async (req, res) => {
+    const [me] = await inFirm(req, (q) => q('SELECT daily_summary, totp_enabled_at, totp_recovery FROM users WHERE id = $1', [req.user.user_id]));
+    const flash = { summary: 'Morning summary setting saved.', on: 'Two-step login is on.', off: 'Two-step login is off.' }[req.query.f];
+    res.render('account', { me, flash: flash ? { ok: true, text: flash } : null, twoStepAvailable: !!cfg.appSecret });
+  });
+
+  app.post('/account/summary', requireUser, requireCsrf, async (req, res) => {
+    await inFirm(req, (q) => q('UPDATE users SET daily_summary = $2 WHERE id = $1', [req.user.user_id, req.body.daily_summary === 'on']));
+    res.redirect(303, '/account?f=summary');
+  });
 
   app.post('/account/password', requireUser, requireCsrf, async (req, res) => {
     const current = String(req.body.current || '').slice(0, 200);
@@ -153,30 +216,42 @@ export function createApp({ db, storage, mailer, config }) {
 
   // ----------------------------------------------------------- dashboard
   app.get('/', requireUser, async (req, res) => {
-    const filter = ['open', 'complete', 'all'].includes(req.query.show) ? req.query.show : 'open';
-    const cases = await inFirm(req, (q) =>
-      q(
-        `SELECT c.id, c.title, c.lender, c.status, c.created_at, c.completed_at,
+    const filters = ['open', 'complete', 'all', 'review', 'stuck', 'due'];
+    const filter = filters.includes(req.query.show) ? req.query.show : 'open';
+    const data = await inFirm(req, async (q) => {
+      const cases = await q(
+        `SELECT c.id, c.title, c.lender, c.status, c.created_at, c.completed_at, c.due_date,
                 c.chasing_started_at, c.next_reminder_at, c.reminders_paused, c.chasing_stopped, c.reminders_sent,
                 cl.first_name, cl.last_name,
                 p.required_total::int, p.required_done::int, p.awaiting_review::int, p.rejected::int
            FROM cases c
            JOIN clients cl ON cl.firm_id = c.firm_id AND cl.id = c.client_id
            JOIN case_progress p ON p.case_id = c.id
-          WHERE ($1 = 'all' OR c.status::text = $1)
-          ORDER BY p.awaiting_review DESC, c.created_at DESC
-          LIMIT 200`,
+          WHERE CASE $1
+                  WHEN 'all' THEN true
+                  WHEN 'review' THEN c.status = 'open' AND p.awaiting_review > 0
+                  WHEN 'stuck' THEN c.status = 'open' AND c.chasing_stopped IS NOT NULL
+                  WHEN 'due' THEN c.status = 'open' AND c.due_date IS NOT NULL AND c.due_date <= current_date + 7
+                  ELSE c.status::text = $1 END
+          ORDER BY CASE WHEN $1 = 'due' THEN c.due_date END, p.awaiting_review DESC, c.created_at DESC
+          LIMIT 300`,
         [filter]
-      )
-    );
-    const [counts] = await inFirm(req, (q) =>
-      q(`SELECT count(*) FILTER (WHERE c.status = 'open')::int AS open,
+      );
+      const [counts] = await q(
+        `SELECT count(*) FILTER (WHERE c.status = 'open')::int AS open,
                 count(*) FILTER (WHERE c.status = 'complete')::int AS complete,
                 count(*)::int AS all,
-                count(*) FILTER (WHERE c.status = 'open' AND p.awaiting_review > 0)::int AS review
-           FROM cases c JOIN case_progress p ON p.case_id = c.id`)
-    );
-    res.render('dashboard', { cases, filter, counts });
+                count(*) FILTER (WHERE c.status = 'open' AND p.awaiting_review > 0)::int AS review,
+                coalesce(sum(p.awaiting_review) FILTER (WHERE c.status = 'open'), 0)::int AS docs_to_review,
+                count(*) FILTER (WHERE c.status = 'open' AND c.chasing_stopped IS NOT NULL)::int AS stuck,
+                count(*) FILTER (WHERE c.status = 'open' AND c.due_date IS NOT NULL AND c.due_date <= current_date + 7)::int AS due,
+                count(*) FILTER (WHERE c.status = 'open' AND c.due_date < current_date)::int AS overdue
+           FROM cases c JOIN case_progress p ON p.case_id = c.id`
+      );
+      return { cases, counts };
+    });
+    const today = dateOnly(new Date());
+    res.render('dashboard', { ...data, filter, today, formatDue });
   });
 
   // ------------------------------------------------------------- clients
@@ -286,13 +361,16 @@ export function createApp({ db, storage, mailer, config }) {
         [caseId]
       );
       const reminders = await q(
-        `SELECT kind, status, recipient, outstanding, sent_at, created_at, error FROM reminders
+        `SELECT kind, channel, status, recipient, outstanding, sent_at, created_at, error FROM reminders
           WHERE case_id = $1 ORDER BY created_at DESC LIMIT 20`,
         [caseId]
       );
-      const [firm] = await q('SELECT reminder_every_days, max_reminders FROM firms');
+      const [firm] = await q('SELECT reminder_every_days, max_reminders, sms_enabled FROM firms');
+      const notes = await q(
+        `SELECT n.body, n.created_at, u.full_name FROM case_notes n LEFT JOIN users u ON u.id = n.user_id
+          WHERE n.case_id = $1 ORDER BY n.created_at DESC LIMIT 100`, [caseId]);
       for (const r of requests) r.documents = documents.filter((d) => d.request_id === r.id);
-      return { kase, requests, links, history, reminders, firm };
+      return { kase, requests, links, history, reminders, firm, notes };
     });
   }
 
@@ -380,13 +458,13 @@ export function createApp({ db, storage, mailer, config }) {
 
   app.post('/cases/:id/chase/start', requireUser, requireCsrf, checkId('id'), async (req, res) => {
     if (!(await caseExists(req))) return res.status(404).render('error', { message: 'Case not found.' });
-    const result = await sendCaseReminder({ db, mailer, baseUrl: cfg.baseUrl, firmId: req.user.firm_id, caseId: req.params.id, kind: 'first', force: true, userId: req.user.user_id, linkDays: cfg.linkDays });
+    const result = await sendCaseReminder({ db, mailer, sms, baseUrl: cfg.baseUrl, firmId: req.user.firm_id, caseId: req.params.id, kind: 'first', force: true, userId: req.user.user_id, linkDays: cfg.linkDays });
     await chaseMessage(req, res, result);
   });
 
   app.post('/cases/:id/chase/now', requireUser, requireCsrf, checkId('id'), async (req, res) => {
     if (!(await caseExists(req))) return res.status(404).render('error', { message: 'Case not found.' });
-    const result = await sendCaseReminder({ db, mailer, baseUrl: cfg.baseUrl, firmId: req.user.firm_id, caseId: req.params.id, kind: 'manual', force: true, userId: req.user.user_id, linkDays: cfg.linkDays });
+    const result = await sendCaseReminder({ db, mailer, sms, baseUrl: cfg.baseUrl, firmId: req.user.firm_id, caseId: req.params.id, kind: 'manual', force: true, userId: req.user.user_id, linkDays: cfg.linkDays });
     await chaseMessage(req, res, result);
   });
 
@@ -523,12 +601,12 @@ export function createApp({ db, storage, mailer, config }) {
     }
     const ok = await inFirm(req, async (q) => {
       const rows = await q(
-        `UPDATE clients SET first_name = $2, last_name = $3, email = $4, phone = $5 WHERE id = $1 RETURNING id`,
-        [req.params.id, v.first_name, v.last_name, v.email, v.phone]
+        `UPDATE clients SET first_name = $2, last_name = $3, email = $4, phone = $5, sms_opt_out = $6 WHERE id = $1 RETURNING id`,
+        [req.params.id, v.first_name, v.last_name, v.email, v.phone, req.body.sms_opt_out === 'on']
       );
       if (!rows.length) return false;
-      // A new email address means chasing can start again where it had stopped for want of one.
-      if (v.email) {
+      // A new email address (or mobile) means chasing can start again where it had stopped for want of one.
+      if (v.email || v.phone) {
         await q(
           `UPDATE cases SET chasing_stopped = NULL, next_reminder_at = coalesce(next_reminder_at, now() + interval '1 hour')
             WHERE client_id = $1 AND chasing_stopped = 'no_email' AND status = 'open'`,
@@ -701,7 +779,7 @@ export function createApp({ db, storage, mailer, config }) {
   // ----------------------------------------------------------------- team
   async function loadTeam(req) {
     return inFirm(req, (q) =>
-      q(`SELECT id, full_name, email, role, disabled_at, last_login_at, password_hash IS NOT NULL AS has_password
+      q(`SELECT id, full_name, email, role, disabled_at, last_login_at, password_hash IS NOT NULL AS has_password, totp_enabled_at IS NOT NULL AS two_step
            FROM users ORDER BY disabled_at NULLS FIRST, role, full_name`)
     );
   }
@@ -727,7 +805,7 @@ export function createApp({ db, storage, mailer, config }) {
   }
 
   app.get('/team', requireUser, requireOwner, async (req, res) => {
-    const flash = { invited: { ok: true, text: 'Invitation sent. The link works for 7 days.' }, failed: { ok: false, text: 'The person was added, but the invitation email couldn\'t be sent. Try "Resend invitation".' } }[req.query.f] || null;
+    const flash = { invited: { ok: true, text: 'Invitation sent. The link works for 7 days.' }, failed: { ok: false, text: 'The person was added, but the invitation email couldn\'t be sent. Try "Resend invitation".' }, reset2fa: { ok: true, text: 'Two-step login reset. They can log in with their password and set it up again.' } }[req.query.f] || null;
     res.render('team', { team: await loadTeam(req), error: null, values: {}, flash });
   });
 
@@ -773,22 +851,359 @@ export function createApp({ db, storage, mailer, config }) {
 
   // ------------------------------------------------------------- settings
   app.get('/settings', requireUser, requireOwner, async (req, res) => {
-    const [firm] = await inFirm(req, (q) => q('SELECT name, reminder_every_days, max_reminders FROM firms'));
-    res.render('settings', { values: firm, error: null, flash: req.query.saved ? { ok: true, text: 'Settings saved.' } : null });
+    const [firm] = await inFirm(req, (q) => q('SELECT name, reminder_every_days, max_reminders, advisers_see_all, sms_enabled, data_retention_days FROM firms'));
+    res.render('settings', { values: firm, error: null, smsAvailable: !!sms, flash: req.query.saved ? { ok: true, text: 'Settings saved.' } : null });
   });
 
   app.post('/settings', requireUser, requireCsrf, requireOwner, async (req, res) => {
-    const v = { name: clean(req.body.name, 120), reminder_every_days: Number(req.body.reminder_every_days), max_reminders: Number(req.body.max_reminders) };
+    const v = {
+      name: clean(req.body.name, 120), reminder_every_days: Number(req.body.reminder_every_days), max_reminders: Number(req.body.max_reminders),
+      advisers_see_all: req.body.advisers_see_all !== 'own', sms_enabled: req.body.sms_enabled === 'on',
+      data_retention_days: Math.round(Number(req.body.retention_years) * 365) || null,
+    };
     let error = null;
     if (!v.name) error = 'Add your firm\'s name.';
     else if (!Number.isInteger(v.reminder_every_days) || v.reminder_every_days < 1 || v.reminder_every_days > 30) error = 'Days between reminders must be a whole number from 1 to 30.';
     else if (!Number.isInteger(v.max_reminders) || v.max_reminders < 1 || v.max_reminders > 20) error = 'Most emails per case must be a whole number from 1 to 20.';
-    if (error) return res.status(400).render('settings', { values: v, error, flash: null });
+    else if (!v.data_retention_days || v.data_retention_days < 365 || v.data_retention_days > 3650) error = 'Keep closed cases for between 1 and 10 years.';
+    if (error) return res.status(400).render('settings', { values: v, error, smsAvailable: !!sms, flash: null });
     await inFirm(req, async (q) => {
-      await q('UPDATE firms SET name = $1, reminder_every_days = $2, max_reminders = $3', [v.name, v.reminder_every_days, v.max_reminders]);
-      await audit(q, { ...actor(req), action: 'firm.settings_updated', entityType: 'firm', entityId: req.user.firm_id, details: { reminder_every_days: v.reminder_every_days, max_reminders: v.max_reminders } });
+      await q('UPDATE firms SET name = $1, reminder_every_days = $2, max_reminders = $3, advisers_see_all = $4, sms_enabled = $5, data_retention_days = $6',
+        [v.name, v.reminder_every_days, v.max_reminders, v.advisers_see_all, v.sms_enabled && !!sms, v.data_retention_days]);
+      await audit(q, { ...actor(req), action: 'firm.settings_updated', entityType: 'firm', entityId: req.user.firm_id, details: { reminder_every_days: v.reminder_every_days, max_reminders: v.max_reminders, advisers_see_all: v.advisers_see_all, sms_enabled: v.sms_enabled, data_retention_days: v.data_retention_days } });
     });
     res.redirect(303, '/settings?saved=1');
+  });
+
+  // ------------------------------------------------------- two-step login
+  app.get('/login/2fa', (req, res) => {
+    if (!req.pendingMfa) return res.redirect('/login');
+    res.render('login_2fa', { error: null });
+  });
+
+  app.post('/login/2fa', async (req, res) => {
+    const p = req.pendingMfa;
+    if (!p) return res.redirect('/login');
+    const key = `2fa|${p.user_id}`;
+    const fail = (status, error) => res.status(status).render('login_2fa', { error });
+    if (limiter.blocked(key)) return fail(429, 'Too many attempts. Wait 15 minutes and try again.');
+    const code = String(req.body.code || '').trim();
+    const ok = await db.asFirm(p.firm_id, async (q) => {
+      const [u] = await q('SELECT totp_secret_enc, totp_last_step, totp_recovery FROM users WHERE id = $1 FOR UPDATE', [p.user_id]);
+      if (!u?.totp_secret_enc) return false;
+      const step = verifyTotp(decryptSecret(u.totp_secret_enc, cfg.appSecret), code);
+      if (step !== null && (u.totp_last_step === null || step > Number(u.totp_last_step))) {
+        await q('UPDATE users SET totp_last_step = $2 WHERE id = $1', [p.user_id, step]);
+        return 'code';
+      }
+      const rc = sha256(normaliseRecovery(code));
+      if ((u.totp_recovery || []).includes(rc)) {
+        await q('UPDATE users SET totp_recovery = array_remove(totp_recovery, $2) WHERE id = $1', [p.user_id, rc]);
+        return 'recovery';
+      }
+      return false;
+    });
+    if (!ok) {
+      limiter.fail(key);
+      return fail(401, 'That code didn\'t work. Check the time on your phone and try the newest code.');
+    }
+    limiter.reset(key);
+    await db.asApp((q) => q('SELECT session_mfa_complete($1, $2)', [sha256(req.sessionToken), cfg.sessionHours]));
+    await db.asFirm(p.firm_id, (q) => audit(q, { firmId: p.firm_id, actorType: 'user', userId: p.user_id, action: ok === 'recovery' ? 'user.login_recovery_code' : 'user.login', entityType: 'user', entityId: p.user_id, ip: req.ip }));
+    res.redirect(303, '/');
+  });
+
+  app.get('/account/2fa/setup', requireUser, async (req, res) => {
+    if (!cfg.appSecret) return res.status(503).render('error', { message: 'Two-step login isn\'t available until APP_SECRET is set on the server.' });
+    if (req.user.totp_enabled) return res.redirect('/account');
+    const secret = newTotpSecret();
+    await inFirm(req, (q) => q('UPDATE users SET totp_secret_enc = $2 WHERE id = $1 AND totp_enabled_at IS NULL', [req.user.user_id, encryptSecret(secret, cfg.appSecret)]));
+    const qr = await QRCode.toString(totpUri({ secret, account: req.user.email }), { type: 'svg', margin: 1, color: { dark: '#14222B', light: '#FFFFFF' } });
+    res.render('twostep_setup', { qr, secret: secret.replace(/(.{4})/g, '$1 ').trim(), error: null, codes: null });
+  });
+
+  app.post('/account/2fa/setup', requireUser, requireCsrf, async (req, res) => {
+    if (!cfg.appSecret) return res.status(503).render('error', { message: 'Two-step login isn\'t available.' });
+    const codes = newRecoveryCodes();
+    const result = await inFirm(req, async (q) => {
+      const [u] = await q('SELECT totp_secret_enc FROM users WHERE id = $1 AND totp_enabled_at IS NULL', [req.user.user_id]);
+      if (!u?.totp_secret_enc) return 'missing';
+      const secret = decryptSecret(u.totp_secret_enc, cfg.appSecret);
+      const step = verifyTotp(secret, req.body.code);
+      if (step === null) return { secret };
+      await q(`UPDATE users SET totp_enabled_at = now(), totp_last_step = $2, totp_recovery = $3 WHERE id = $1`,
+        [req.user.user_id, step, codes.map((c) => sha256(normaliseRecovery(c)))]);
+      await audit(q, { ...actor(req), action: 'user.two_step_on', entityType: 'user', entityId: req.user.user_id });
+      return 'ok';
+    });
+    if (result === 'missing') return res.redirect('/account/2fa/setup');
+    if (result !== 'ok') {
+      const qr = await QRCode.toString(totpUri({ secret: result.secret, account: req.user.email }), { type: 'svg', margin: 1, color: { dark: '#14222B', light: '#FFFFFF' } });
+      return res.status(400).render('twostep_setup', { qr, secret: result.secret.replace(/(.{4})/g, '$1 ').trim(), error: 'That code didn\'t match. Enter the 6-digit code your app shows now.', codes: null });
+    }
+    res.render('twostep_setup', { qr: null, secret: null, error: null, codes });
+  });
+
+  app.post('/account/2fa/disable', requireUser, requireCsrf, async (req, res) => {
+    const [found] = await db.asApp((q) => q('SELECT * FROM auth_find_user($1)', [req.user.email]));
+    if (!found || !(await verifyPassword(String(req.body.password || ''), found.password_hash))) {
+      return res.status(400).render('error', { message: 'Your password was wrong, so two-step login is still on.' });
+    }
+    await inFirm(req, async (q) => {
+      await q('UPDATE users SET totp_enabled_at = NULL, totp_secret_enc = NULL, totp_recovery = NULL, totp_last_step = NULL WHERE id = $1', [req.user.user_id]);
+      await audit(q, { ...actor(req), action: 'user.two_step_off', entityType: 'user', entityId: req.user.user_id });
+    });
+    res.redirect(303, '/account?f=off');
+  });
+
+  // Owner: someone lost their phone and their recovery codes.
+  app.post('/team/:uid/reset-2fa', requireUser, requireCsrf, requireOwner, checkId('uid'), async (req, res) => {
+    const ok = await inFirm(req, async (q) => {
+      const rows = await q('UPDATE users SET totp_enabled_at = NULL, totp_secret_enc = NULL, totp_recovery = NULL, totp_last_step = NULL WHERE id = $1 AND id <> $2 RETURNING id', [req.params.uid, req.user.user_id]);
+      if (!rows.length) return false;
+      await q('SELECT sessions_revoke_user($1)', [req.params.uid]);
+      await audit(q, { ...actor(req), action: 'user.two_step_reset', entityType: 'user', entityId: req.params.uid });
+      return true;
+    });
+    if (!ok) return res.status(404).render('error', { message: 'Person not found.' });
+    res.redirect(303, '/team?f=reset2fa');
+  });
+
+  app.post('/team/:uid/role', requireUser, requireCsrf, requireOwner, checkId('uid'), async (req, res) => {
+    const role = ['owner', 'adviser', 'admin_staff'].includes(req.body.role) ? req.body.role : null;
+    if (!role) return res.status(400).render('error', { message: 'Choose a role.' });
+    if (req.params.uid === req.user.user_id) return res.status(400).render('error', { message: 'Ask another owner to change your own role.' });
+    const ok = await inFirm(req, async (q) => {
+      const rows = await q('UPDATE users SET role = $2 WHERE id = $1 RETURNING id', [req.params.uid, role]);
+      if (!rows.length) return false;
+      await audit(q, { ...actor(req), action: 'user.role_changed', entityType: 'user', entityId: req.params.uid, details: { role } });
+      return true;
+    });
+    if (!ok) return res.status(404).render('error', { message: 'Person not found.' });
+    res.redirect(303, '/team');
+  });
+
+  // ------------------------------------------------------- due dates & notes
+  app.post('/cases/:id/due', requireUser, requireCsrf, checkId('id'), async (req, res) => {
+    const raw = String(req.body.due_date || '').trim();
+    if (raw && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return res.status(400).render('error', { message: 'Choose a valid date.' });
+    const ok = await inFirm(req, async (q) => {
+      const rows = await q('UPDATE cases SET due_date = $2 WHERE id = $1 RETURNING id', [req.params.id, raw || null]);
+      if (rows.length) await audit(q, { ...actor(req), action: raw ? 'case.due_set' : 'case.due_cleared', entityType: 'case', entityId: req.params.id, details: raw ? { due_date: raw } : {} });
+      return rows.length > 0;
+    });
+    if (!ok) return res.status(404).render('error', { message: 'Case not found.' });
+    res.redirect(303, `/cases/${req.params.id}`);
+  });
+
+  app.post('/cases/:id/notes', requireUser, requireCsrf, checkId('id'), async (req, res) => {
+    const body = String(req.body.body || '').replace(/\r\n/g, '\n').trim().slice(0, 2000);
+    if (!body) return res.redirect(303, `/cases/${req.params.id}`);
+    const ok = await inFirm(req, async (q) => {
+      const [k] = await q('SELECT id FROM cases WHERE id = $1', [req.params.id]);
+      if (!k) return false;
+      await q('INSERT INTO case_notes (firm_id, case_id, user_id, body) VALUES ($1, $2, $3, $4)', [req.user.firm_id, req.params.id, req.user.user_id, body]);
+      await audit(q, { ...actor(req), action: 'note.added', entityType: 'case', entityId: req.params.id });
+      return true;
+    });
+    if (!ok) return res.status(404).render('error', { message: 'Case not found.' });
+    res.redirect(303, `/cases/${req.params.id}#notes`);
+  });
+
+  // ------------------------------------------------------------------ search
+  app.get('/search', requireUser, async (req, res) => {
+    const term = clean(req.query.q, 100);
+    let clients = [], cases = [];
+    if (term.length >= 2) {
+      const like = `%${term.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+      ({ clients, cases } = await inFirm(req, async (q) => ({
+        clients: await q(
+          `SELECT id, first_name, last_name, email, phone, archived_at FROM clients
+            WHERE first_name || ' ' || last_name ILIKE $1 OR email ILIKE $1 OR replace(coalesce(phone, ''), ' ', '') ILIKE replace($1, ' ', '')
+            ORDER BY archived_at NULLS FIRST, last_name LIMIT 50`, [like]),
+        cases: await q(
+          `SELECT c.id, c.title, c.lender, c.status, cl.first_name, cl.last_name FROM cases c JOIN clients cl ON cl.id = c.client_id
+            WHERE c.title ILIKE $1 OR coalesce(c.lender, '') ILIKE $1 OR cl.first_name || ' ' || cl.last_name ILIKE $1
+            ORDER BY c.created_at DESC LIMIT 50`, [like]),
+      })));
+    }
+    res.render('search', { term, clients, cases });
+  });
+
+  // -------------------------------------------------------------- checklists
+  function parseItems(text) {
+    return String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(0, 60).map((line, i) => {
+      const optional = /^\(optional\)\s*/i.test(line);
+      const [label, help] = line.replace(/^\(optional\)\s*/i, '').split('|').map((x) => x.trim());
+      return { label: label.slice(0, 150), help_text: help ? help.slice(0, 300) : null, required: !optional, sort_order: i + 1 };
+    }).filter((x) => x.label);
+  }
+  const itemsToText = (items) => items.map((i) => `${i.required ? '' : '(optional) '}${i.label}${i.help_text ? ` | ${i.help_text}` : ''}`).join('\n');
+
+  app.get('/checklists', requireUser, async (req, res) => {
+    const templates = await inFirm(req, (q) =>
+      q(`SELECT t.id, t.name, t.firm_id IS NULL AS builtin, count(i.id)::int AS items
+           FROM checklist_templates t LEFT JOIN checklist_template_items i ON i.template_id = t.id
+          GROUP BY t.id ORDER BY t.firm_id NULLS FIRST, t.name`));
+    res.render('checklists', { templates });
+  });
+
+  async function loadTemplate(req, id) {
+    return inFirm(req, async (q) => {
+      const [t] = await q('SELECT id, name, firm_id IS NULL AS builtin FROM checklist_templates WHERE id = $1', [id]);
+      if (!t) return null;
+      t.items = await q('SELECT label, help_text, required FROM checklist_template_items WHERE template_id = $1 ORDER BY sort_order', [id]);
+      return t;
+    });
+  }
+
+  app.get('/checklists/new', requireUser, async (req, res) => {
+    const from = UUID.test(req.query.from || '') ? await loadTemplate(req, req.query.from) : null;
+    res.render('checklist_edit', { t: null, values: { name: from ? `${from.name} (copy)` : '', items: from ? itemsToText(from.items) : '' }, error: null });
+  });
+
+  async function saveTemplate(req, res, id) {
+    const name = clean(req.body.name, 100);
+    const items = parseItems(req.body.items);
+    const values = { name, items: req.body.items || '' };
+    if (!name || !items.length) {
+      return res.status(400).render('checklist_edit', { t: id ? { id } : null, values, error: !name ? 'Give the checklist a name.' : 'Add at least one document, one per line.' });
+    }
+    const savedId = await inFirm(req, async (q) => {
+      let tid = id;
+      if (tid) {
+        const rows = await q('UPDATE checklist_templates SET name = $2 WHERE id = $1 AND firm_id IS NOT NULL RETURNING id', [tid, name]);
+        if (!rows.length) return null;
+        await q('DELETE FROM checklist_template_items WHERE template_id = $1', [tid]);
+      } else {
+        [{ id: tid }] = await q('INSERT INTO checklist_templates (firm_id, name) VALUES ($1, $2) RETURNING id', [req.user.firm_id, name]);
+      }
+      for (const it of items) {
+        await q('INSERT INTO checklist_template_items (template_id, label, help_text, required, sort_order) VALUES ($1, $2, $3, $4, $5)',
+          [tid, it.label, it.help_text, it.required, it.sort_order]);
+      }
+      await audit(q, { ...actor(req), action: id ? 'checklist.updated' : 'checklist.created', entityType: 'checklist', entityId: tid, details: { name } });
+      return tid;
+    });
+    if (!savedId) return res.status(404).render('error', { message: 'Checklist not found, or it\'s a built-in one that can\'t be changed.' });
+    res.redirect(303, '/checklists');
+  }
+
+  app.post('/checklists', requireUser, requireCsrf, (req, res) => saveTemplate(req, res, null));
+
+  app.get('/checklists/:id', requireUser, checkId('id'), async (req, res) => {
+    const t = await loadTemplate(req, req.params.id);
+    if (!t) return res.status(404).render('error', { message: 'Checklist not found.' });
+    if (t.builtin) return res.redirect(`/checklists/new?from=${t.id}`);
+    res.render('checklist_edit', { t, values: { name: t.name, items: itemsToText(t.items) }, error: null });
+  });
+
+  app.post('/checklists/:id', requireUser, requireCsrf, checkId('id'), (req, res) => saveTemplate(req, res, req.params.id));
+
+  app.post('/checklists/:id/delete', requireUser, requireCsrf, checkId('id'), async (req, res) => {
+    const ok = await inFirm(req, async (q) => {
+      const rows = await q('DELETE FROM checklist_templates WHERE id = $1 AND firm_id IS NOT NULL RETURNING name', [req.params.id]);
+      if (rows.length) await audit(q, { ...actor(req), action: 'checklist.deleted', entityType: 'checklist', entityId: req.params.id, details: { name: rows[0].name } });
+      return rows.length > 0;
+    });
+    if (!ok) return res.status(404).render('error', { message: 'Checklist not found.' });
+    res.redirect(303, '/checklists');
+  });
+
+  // ----------------------------------------------------- download whole file
+  app.get('/cases/:id/export', requireUser, checkId('id'), async (req, res) => {
+    const data = await inFirm(req, async (q) => {
+      const [k] = await q(`SELECT c.id, cl.first_name, cl.last_name FROM cases c JOIN clients cl ON cl.id = c.client_id WHERE c.id = $1`, [req.params.id]);
+      if (!k) return null;
+      const docs = await q(
+        `SELECT d.storage_key, d.original_filename, d.mime_type, r.label, r.sort_order, r.status
+           FROM documents d JOIN document_requests r ON r.id = d.request_id
+          WHERE r.case_id = $1 AND d.deleted_at IS NULL AND r.status IN ('accepted', 'received')
+          ORDER BY r.sort_order, d.uploaded_at`, [req.params.id]);
+      await audit(q, { ...actor(req), action: 'case.exported', entityType: 'case', entityId: req.params.id, details: { files: docs.length } });
+      return { k, docs };
+    });
+    if (!data) return res.status(404).render('error', { message: 'Case not found.' });
+    if (!data.docs.length) return res.status(400).render('error', { message: 'There are no received or accepted documents to download yet.' });
+    const safe = (x) => String(x).normalize('NFKD').replace(/[^\w.\- ]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'file';
+    const zipName = `${safe(`${data.k.first_name} ${data.k.last_name}`)} - documents.zip`;
+    res.set({ 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${zipName}"`, 'Cache-Control': 'private, no-store' });
+    const zip = new ZipArchive({ zlib: { level: 6 } });
+    zip.on('error', (err) => { console.error('Zip failed:', err.message); res.destroy(err); });
+    zip.pipe(res);
+    const used = new Map();
+    for (const d of data.docs) {
+      const ext = (d.original_filename.match(/\.[A-Za-z0-9]{1,5}$/) || [''])[0] || { 'application/pdf': '.pdf', 'image/jpeg': '.jpg', 'image/png': '.png', 'image/heic': '.heic' }[d.mime_type] || '';
+      const base = `${String(d.sort_order).padStart(2, '0')} ${safe(d.label)}${d.status === 'received' ? ' (not yet reviewed)' : ''}`;
+      const n = (used.get(base) || 0) + 1;
+      used.set(base, n);
+      zip.append(await storage.get(d.storage_key), { name: `${base}${n > 1 ? ` ${n}` : ''}${ext.toLowerCase()}` });
+    }
+    await zip.finalize();
+  });
+
+  // ---------------------------------------------------------- security page
+  app.get('/security', (req, res) => res.render('security', {}));
+
+  // ----------------------------------------------------------------- billing
+  app.get('/billing', requireUser, requireOwner, async (req, res) => {
+    const [firm] = await inFirm(req, (q) => q('SELECT billing_status, trial_ends_at, stripe_customer_id FROM firms'));
+    const flash = req.query.done ? { ok: true, text: 'Thanks. Your subscription is being set up and this page will show it shortly.' } : null;
+    res.render('billing', { firm, available: !!(stripe && cfg.stripePriceId), flash });
+  });
+
+  app.post('/billing/checkout', requireUser, requireCsrf, requireOwner, async (req, res) => {
+    if (!stripe || !cfg.stripePriceId) return res.status(503).render('error', { message: 'Billing isn\'t set up yet.' });
+    const [firm] = await inFirm(req, (q) => q('SELECT stripe_customer_id FROM firms'));
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      line_items: [{ price: cfg.stripePriceId, quantity: 1 }],
+      client_reference_id: req.user.firm_id,
+      ...(firm.stripe_customer_id ? { customer: firm.stripe_customer_id } : { customer_email: req.user.email }),
+      subscription_data: { metadata: { firm_id: req.user.firm_id } },
+      success_url: `${cfg.baseUrl}/billing?done=1`,
+      cancel_url: `${cfg.baseUrl}/billing`,
+    });
+    res.redirect(303, session.url);
+  });
+
+  app.post('/billing/portal', requireUser, requireCsrf, requireOwner, async (req, res) => {
+    const [firm] = await inFirm(req, (q) => q('SELECT stripe_customer_id FROM firms'));
+    if (!stripe || !firm.stripe_customer_id) return res.status(400).render('error', { message: 'There\'s no subscription to manage yet.' });
+    const portal = await stripe.billingPortal.sessions.create({ customer: firm.stripe_customer_id, return_url: `${cfg.baseUrl}/billing` });
+    res.redirect(303, portal.url);
+  });
+
+  // ---------------------------------------------------------------- sign up
+  app.get('/signup', (req, res) => {
+    if (!cfg.allowSignup) return res.status(404).render('error', { message: 'Page not found.' });
+    if (req.user) return res.redirect('/');
+    res.render('signup', { error: null, values: {}, trialDays: cfg.trialDays });
+  });
+
+  app.post('/signup', async (req, res) => {
+    if (!cfg.allowSignup) return res.status(404).render('error', { message: 'Page not found.' });
+    const v = { firm: clean(req.body.firm, 120), full_name: clean(req.body.full_name, 100), email: clean(req.body.email, 200).toLowerCase() };
+    const password = String(req.body.password || '').slice(0, 200);
+    const fail = (status, error) => res.status(status).render('signup', { error, values: v, trialDays: cfg.trialDays });
+    const key = `signup|${req.ip}`;
+    if (limiter.blocked(key)) return fail(429, 'Too many sign-ups from here. Try again later.');
+    if (!v.firm || !v.full_name) return fail(400, 'Add your firm\'s name and your own name.');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email)) return fail(400, 'That email address doesn\'t look right.');
+    if (password.length < MIN_PASSWORD_LENGTH) return fail(400, `Your password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+    if (req.body.terms !== 'yes') return fail(400, 'Tick the box to accept the terms.');
+    limiter.fail(key);
+    let created;
+    try {
+      [created] = await db.asApp(async (q) => q('SELECT * FROM signup_create_firm($1, $2, $3, $4, $5)', [v.firm, v.full_name, v.email, await hashPassword(password), cfg.trialDays]));
+    } catch (err) {
+      if (/users_email_key|duplicate key/.test(err.message)) return fail(400, 'That email already has a Fileready login. Try logging in, or reset your password.');
+      throw err;
+    }
+    const token = randomToken();
+    await db.asApp((q) => q('SELECT session_create_v2($1, $2, $3, false)', [sha256(token), created.user_id, cfg.sessionHours]));
+    setSessionCookie(res, token);
+    res.redirect(303, '/?welcome=1');
   });
 
   // ------------------------------------------- client upload page (no login)

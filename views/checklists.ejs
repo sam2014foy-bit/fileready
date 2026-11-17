@@ -1,0 +1,14 @@
+<%- include('partials/head', { title: 'Checklists' }) %>
+<%- include('partials/nav') %>
+<div class="page-head"><div><h1>Checklists</h1><p>Document lists you can start a case with.</p></div><a class="btn" href="/checklists/new">New checklist</a></div>
+<section class="surface">
+<table class="ledger"><thead><tr><th>Name</th><th>Documents</th><th></th></tr></thead><tbody>
+<% for (const t of templates) { %>
+  <tr><td class="client-cell"><a href="/checklists/<%= t.id %>"><%= t.name %></a><% if (t.builtin) { %><span class="sub">Built in</span><% } %></td>
+    <td class="num"><%= t.items %></td>
+    <td style="text-align:right"><% if (t.builtin) { %><a href="/checklists/new?from=<%= t.id %>">Copy and edit</a><% } else { %>
+      <form method="post" action="/checklists/<%= t.id %>/delete" class="inline-form"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link quiet">Delete</button></form><% } %></td></tr>
+<% } %>
+</tbody></table>
+</section>
+<%- include('partials/foot') %>

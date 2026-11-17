@@ -1,0 +1,37 @@
+<%- include('partials/head', { title: 'Account' }) %>
+<%- include('partials/nav') %>
+<div class="page-head"><div><h1>Account</h1><p><%= user.full_name %>, <%= user.email %></p></div></div>
+<% if (flash) { %><p class="notice ok" role="status"><%= flash.text %></p><% } %>
+<section class="surface">
+  <div class="surface-head"><h2>Password</h2></div>
+  <div class="surface-body"><p class="muted small" style="margin:0 0 14px">Changing your password signs you out everywhere else.</p>
+    <a class="btn quiet small" href="/account/password">Change password</a></div>
+</section>
+<section class="surface">
+  <div class="surface-head"><h2>Two-step login</h2>
+    <% if (me.totp_enabled_at) { %><span class="chip good">On</span><% } else { %><span class="chip">Off</span><% } %></div>
+  <div class="surface-body">
+    <% if (me.totp_enabled_at) { %>
+      <p class="muted small" style="margin:0 0 14px">You log in with your password and a code from your authenticator app. <%= (me.totp_recovery || []).length %> recovery codes left.</p>
+      <form method="post" action="/account/2fa/disable" class="row-actions" style="align-items:flex-end">
+        <input type="hidden" name="_csrf" value="<%= csrf %>">
+        <label style="margin:0;max-width:260px">Your password, to turn it off <input type="password" name="password" autocomplete="current-password" required></label>
+        <button class="btn danger small">Turn off two-step login</button>
+      </form>
+    <% } else if (twoStepAvailable) { %>
+      <p class="muted small" style="margin:0 0 14px">Add a code from an app such as Google Authenticator or Microsoft Authenticator when you log in, so a stolen password alone isn't enough.</p>
+      <a class="btn small" href="/account/2fa/setup">Set up two-step login</a>
+    <% } else { %>
+      <p class="muted small" style="margin:0">Not available yet on this server.</p>
+    <% } %>
+  </div>
+</section>
+<form method="post" action="/account/summary" class="surface">
+  <div class="surface-head"><h2>Morning summary</h2></div>
+  <div class="surface-body">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <label class="inline" style="margin-bottom:14px"><input type="checkbox" name="daily_summary" <%= me.daily_summary ? 'checked' : '' %>> Email me each weekday morning with what's waiting for review, who isn't responding and what's overdue</label>
+    <div><button class="btn quiet small">Save</button></div>
+  </div>
+</form>
+<%- include('partials/foot') %>

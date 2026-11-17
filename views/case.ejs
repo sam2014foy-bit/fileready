@@ -20,6 +20,13 @@
       <% if (kase.client_phone) { %><span class="num"><%= kase.client_phone %></span><% } %>
       <% if (kase.adviser_name) { %><span>Adviser: <%= kase.adviser_name %></span><% } %>
     </div>
+    <form method="post" action="/cases/<%= kase.id %>/due" class="due-form">
+      <input type="hidden" name="_csrf" value="<%= csrf %>">
+      <% const dueStr = kase.due_date ? dateOnly(kase.due_date) : ''; %>
+      <label class="inline small">Documents due <input type="date" name="due_date" value="<%= dueStr %>"></label>
+      <button class="link">Save</button>
+      <% if (dueStr && dueStr < dateOnly(new Date()) && kase.status === 'open') { %><span class="chip bad">Overdue</span><% } %>
+    </form>
   </div>
   <div class="case-state">
     <%- include('partials/ring', { done, total: required.length, size: 116, sub: 'required' }) %>
@@ -51,13 +58,15 @@
         <p class="status-line"><strong>On.</strong> <%= kase.reminders_sent %> email<%= kase.reminders_sent === 1 ? '' : 's' %> sent.
           <% if (kase.next_reminder_at) { %>Next reminder <span class="when"><%= fmt(kase.next_reminder_at) %></span><span class="muted">, or the next weekday morning.</span><% } %></p>
       <% } %>
-      <% if (!kase.client_email) { %><p class="status-line small bad-text">This client has no email address, so Fileready can't chase them by email.</p><% } %>
+      <% const canText = firm.sms_enabled && kase.client_phone; %>
+      <% if (!kase.client_email && !canText) { %><p class="status-line small bad-text">This client has no email address<%= firm.sms_enabled ? ' or mobile number' : '' %>, so Fileready can't chase them.</p>
+      <% } else if (canText) { %><p class="status-line small muted">Reminders go by <%= kase.client_email ? 'email and text' : 'text' %>.</p><% } %>
     </div>
     <div class="chase-actions">
       <% const btn = (path, label, cls) => { %>
         <form method="post" action="/cases/<%= kase.id %>/chase/<%= path %>"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="<%= cls %>"><%= label %></button></form>
       <% } %>
-      <% if (kase.status === 'open' && kase.client_email) { %>
+      <% if (kase.status === 'open' && (kase.client_email || canText)) { %>
         <% if (!kase.chasing_started_at) { btn('start', 'Email client & start chasing', 'btn'); } else { %>
           <% btn('now', 'Send reminder now', 'btn quiet small'); %>
           <% if (kase.reminders_paused || kase.chasing_stopped) { btn('resume', 'Resume reminders', 'link'); } else { btn('pause', 'Pause reminders', 'link'); } %>
@@ -69,7 +78,7 @@
   <ul class="sent-list">
     <% for (const r of reminders) { %>
       <li><span class="t"><%= fmt(r.sent_at || r.created_at) %></span>
-        <span><%= { first: 'First request', reminder: 'Reminder', manual: 'Reminder (sent by you)' }[r.kind] %> to <%= r.recipient %>, <%= r.outstanding %> outstanding
+        <span><%= { first: 'First request', reminder: 'Reminder', manual: 'Reminder (sent by you)' }[r.kind] %> by <%= r.channel === 'sms' ? 'text' : 'email' %> to <%= r.recipient %>, <%= r.outstanding %> outstanding
         <% if (r.status === 'failed') { %><span class="bad-text">– failed, will retry</span><% } else if (r.status === 'scheduled') { %><span class="muted">– sending</span><% } %></span></li>
     <% } %>
   </ul>
@@ -89,8 +98,11 @@
 <section class="surface">
   <div class="surface-head">
     <h2>Documents</h2>
-    <form method="post" action="/cases/<%= kase.id %>/links"><input type="hidden" name="_csrf" value="<%= csrf %>">
-      <button class="link" title="Make a link to send yourself, for example by WhatsApp">Copy a link instead</button></form>
+    <div class="row-actions" style="align-items:center;gap:20px">
+      <% if (requests.some((r) => r.documents.length && ['accepted', 'received'].includes(r.status))) { %><a class="link-plain" href="/cases/<%= kase.id %>/export">Download all (zip)</a><% } %>
+      <form method="post" action="/cases/<%= kase.id %>/links"><input type="hidden" name="_csrf" value="<%= csrf %>">
+        <button class="link" title="Make a link to send yourself, for example by WhatsApp">Copy a link instead</button></form>
+    </div>
   </div>
   <% if (!requests.length) { %><p class="surface-body muted">No documents on the checklist yet. Add one below.</p><% } %>
   <ul class="checklist" style="margin-top:8px">
@@ -134,6 +146,20 @@
     <label class="inline"><input type="checkbox" name="required" checked> Required</label>
     <button class="btn quiet small">Add</button>
   </form>
+</section>
+
+<section class="surface" id="notes" style="margin-top:20px">
+  <div class="surface-head"><h2>Notes</h2><span class="muted small">Only your team sees these</span></div>
+  <div class="surface-body">
+    <form method="post" action="/cases/<%= kase.id %>/notes" class="note-form">
+      <input type="hidden" name="_csrf" value="<%= csrf %>">
+      <textarea name="body" rows="2" maxlength="2000" placeholder="e.g. Rang Niamh, payslips coming Monday" aria-label="New note" required></textarea>
+      <button class="btn quiet small">Add note</button>
+    </form>
+    <% if (notes.length) { %><ul class="plain notes">
+      <% for (const n of notes) { %><li><p><%= n.body %></p><span class="small muted"><%= n.full_name || 'Former colleague' %>, <%= fmt(n.created_at) %></span></li><% } %>
+    </ul><% } %>
+  </div>
 </section>
 
 <div class="two-col">

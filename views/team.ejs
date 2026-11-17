@@ -9,12 +9,18 @@
   <% for (const t of team) { const me = t.id === user.user_id; %>
     <tr>
       <td class="client-cell"><span style="font:500 18px/1.25 var(--serif)"><%= t.full_name %></span><span class="sub"><%= t.email %></span></td>
-      <td><%= { owner: 'Owner', adviser: 'Adviser', admin_staff: 'Admin staff' }[t.role] %></td>
+      <td><% if (me) { %><%= { owner: 'Owner', adviser: 'Adviser', admin_staff: 'Admin staff' }[t.role] %><% } else { %>
+        <form method="post" action="/team/<%= t.id %>/role" class="role-form"><input type="hidden" name="_csrf" value="<%= csrf %>">
+          <select name="role" aria-label="Role for <%= t.full_name %>">
+            <% for (const [k, l] of [['owner', 'Owner'], ['adviser', 'Adviser'], ['admin_staff', 'Admin staff']]) { %><option value="<%= k %>" <%= t.role === k ? 'selected' : '' %>><%= l %></option><% } %>
+          </select><button class="link">Change</button></form><% } %>
+        <% if (t.two_step) { %><span class="sub small muted" style="display:block;margin-top:4px">Two-step login on</span><% } %></td>
       <td><% if (t.disabled_at) { %><span class="chip">No access</span><% } else if (!t.has_password) { %><span class="chip warn">Invited</span><% } else { %><span class="chip good">Active</span><% } %>
         <% if (t.last_login_at) { %><span class="sub small muted" style="display:block;margin-top:4px">Last in <%= new Date(t.last_login_at).toLocaleDateString('en-IE') %></span><% } %></td>
       <td style="text-align:right">
         <% if (!me) { %><div class="actions" style="display:inline-flex;gap:16px">
           <% if (!t.disabled_at && !t.has_password) { %><form method="post" action="/team/<%= t.id %>/resend"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link">Resend invitation</button></form><% } %>
+          <% if (t.two_step) { %><form method="post" action="/team/<%= t.id %>/reset-2fa"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link quiet" title="If they've lost their phone and recovery codes">Reset two-step</button></form><% } %>
           <% if (t.disabled_at) { %><form method="post" action="/team/<%= t.id %>/enable"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link">Give access</button></form>
           <% } else { %><form method="post" action="/team/<%= t.id %>/disable"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link danger">Remove access</button></form><% } %>
         </div><% } else { %><span class="muted small">You</span><% } %>

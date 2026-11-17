@@ -293,9 +293,9 @@ test('the owner cannot remove their own access', async () => {
 
 // ------------------------------------------------------------------ settings
 test('settings: the owner changes the firm name and reminder rules, with checks', async () => {
-  assert.equal((await s.owner.post('/settings', { name: 'Cork Brokers', reminder_every_days: 0, max_reminders: 6 })).status, 400);
-  assert.equal((await s.owner.post('/settings', { name: '', reminder_every_days: 3, max_reminders: 6 })).status, 400);
-  const ok = await s.owner.post('/settings', { name: 'Cork Mortgage Brokers', reminder_every_days: 5, max_reminders: 8 });
+  assert.equal((await s.owner.post('/settings', { name: 'Cork Brokers', reminder_every_days: 0, max_reminders: 6, retention_years: 6 })).status, 400);
+  assert.equal((await s.owner.post('/settings', { name: '', reminder_every_days: 3, max_reminders: 6, retention_years: 6 })).status, 400);
+  const ok = await s.owner.post('/settings', { name: 'Cork Mortgage Brokers', reminder_every_days: 5, max_reminders: 8, retention_years: 6 });
   assert.equal(ok.status, 303);
   const f = await q1('SELECT name, reminder_every_days, max_reminders FROM firms WHERE id = $1', [s['owner@cork.test']]);
   assert.deepEqual({ ...f }, { name: 'Cork Mortgage Brokers', reminder_every_days: 5, max_reminders: 8 });

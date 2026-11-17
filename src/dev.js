@@ -8,7 +8,8 @@ import { createDb, pgliteDriver } from './db.js';
 import { localDiskStorage } from './storage.js';
 import { migrate } from '../db/migrate.js';
 import { hashPassword } from './security.js';
-import { memoryMailer } from './mailer.js';
+import { memoryMailer, memorySms } from './mailer.js';
+import { runDaily } from './daily.js';
 import { runReminders } from './reminders.js';
 
 const PORT = Number(process.env.PORT || 3000);
@@ -29,14 +30,15 @@ if (rows[0].n === 0) {
 
 const db = createDb(pgliteDriver(pglite));
 const mailer = memoryMailer({ log: true });
+const sms = memorySms({ log: true });
 const baseUrl = `http://localhost:${PORT}`;
 const app = createApp({
-  db, mailer,
+  db, mailer, sms,
   storage: localDiskStorage('./.dev-storage'),
-  config: { baseUrl, devOutbox: true },
+  config: { baseUrl, devOutbox: true, appSecret: 'local-development-secret-not-for-production', allowSignup: true },
 });
 // Locally, check for due reminders every minute, at any hour.
-setInterval(() => runReminders({ db, mailer, baseUrl, ignoreHours: true }).catch((e) => console.error(e)), 60_000);
+setInterval(() => runReminders({ db, mailer, sms, baseUrl, ignoreHours: true }).catch((e) => console.error(e)), 60_000);
 app.listen(PORT, () => {
   console.log(`\nFileready running at http://localhost:${PORT}`);
   console.log(`Log in with ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);

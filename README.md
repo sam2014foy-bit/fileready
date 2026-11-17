@@ -26,7 +26,18 @@ required is in. Built for small Irish brokerages.
   hold / reopen / delete, remove a wrong upload, remove a checklist item.
   Permanent deletes are owner-only and need a confirm tick.
 - Adviser gets an email when a client uploads (at most every 30 minutes per case).
-- Next: automatic deletion after the retention period, text reminders.
+- Feature pack (migration 0008):
+  - Today panel on Cases: documents to review, clients not responding, due dates.
+  - Case due dates (shown in reminder emails, overdue flags), team-only case notes, zip download of a case.
+  - Search (clients and cases), firm's own checklists (one item per line, `(optional)` prefix, `label | hint`).
+  - Two-step login with an authenticator app (keys encrypted with `APP_SECRET`, 8 one-time recovery codes);
+    owners can reset a colleague's.
+  - Roles: owners change anyone's role but their own; optional "advisers see only their own cases",
+    enforced by restrictive database policies.
+  - Morning summary email (weekdays, can be turned off on Account) and automatic deletion of closed
+    cases after the firm's retention period: `POST /internal/daily/run`, scheduled 07:30 and 08:30 UTC.
+  - Text reminders through Brevo SMS (off until the owner turns them on in Settings; clients can be excluded).
+  - Public `/security` page, Stripe billing (`/billing`), self sign-up with a free trial (`ALLOW_SIGNUP=true`).
 
 ## Try it on your computer
 
@@ -117,4 +128,10 @@ the app must connect server-side as a role granted `fileready_app`.
 3. Supabase > Connect > Session pooler: copy the host (`aws-…-eu-west-1.pooler.supabase.com`).
 4. Render > New > Blueprint > this repo. Fill in `DATABASE_HOST`, `DATABASE_PASSWORD`,
    `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`.
-5. Before real client data: Supabase Pro, Render paid plan, set `DATABASE_CA`, security review.
+5. Optional settings in Render > Environment:
+   - `APP_SECRET`: 32+ random characters, needed for two-step login. Never change it once people use it.
+   - `BREVO_SMS_SENDER`: up to 11 letters (e.g. `Fileready`), after registering the sender ID and buying SMS credit in Brevo.
+   - `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`: webhook endpoint `<app>/stripe/webhook`
+     with events `checkout.session.completed` and `customer.subscription.*`.
+   - `ALLOW_SIGNUP=true` to open self sign-up.
+6. Before real client data: Supabase Pro, Render paid plan, set `DATABASE_CA`, security review.

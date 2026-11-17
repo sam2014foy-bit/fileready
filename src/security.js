@@ -78,3 +78,99 @@ export function detectFileType(buf) {
   }
   return null;
 }
+
+// ---------------------------------------------------------------- two-step login (TOTP, RFC 6238)
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+export function base32Encode(buf) {
+  let bits = 0, value = 0, out = '';
+  for (const byte of buf) {
+    value = (value << 8) | byte; bits += 8;
+    while (bits >= 5) { out += B32[(value >>> (bits - 5)) & 31]; bits -= 5; }
+  }
+  if (bits > 0) out += B32[(value << (5 - bits)) & 31];
+  return out;
+}
+
+export function base32Decode(str) {
+  const clean = String(str).toUpperCase().replace(/[^A-Z2-7]/g, '');
+  let bits = 0, value = 0;
+  const out = [];
+  for (const ch of clean) {
+    value = (value << 5) | B32.indexOf(ch); bits += 5;
+    if (bits >= 8) { out.push((value >>> (bits - 8)) & 255); bits -= 8; }
+  }
+  return Buffer.from(out);
+}
+
+export function newTotpSecret() {
+  return base32Encode(crypto.randomBytes(20));
+}
+
+function hotp(key, counter) {
+  const msg = Buffer.alloc(8);
+  msg.writeBigUInt64BE(BigInt(counter));
+  const h = crypto.createHmac('sha1', key).update(msg).digest();
+  const o = h[19] & 0xf;
+  return String((h.readUInt32BE(o) & 0x7fffffff) % 1000000).padStart(6, '0');
+}
+
+export const totpStep = (time = Date.now()) => Math.floor(time / 30000);
+
+export function totpCode(secret, time = Date.now()) {
+  return hotp(base32Decode(secret), totpStep(time));
+}
+
+/** Returns the matching 30-second step (allowing one step either side), or null. */
+export function verifyTotp(secret, code, time = Date.now()) {
+  const c = String(code ?? '').replace(/\s/g, '');
+  if (!/^\d{6}$/.test(c)) return null;
+  const key = base32Decode(secret);
+  const now = totpStep(time);
+  for (const step of [now - 1, now, now + 1]) if (safeEqual(hotp(key, step), c)) return step;
+  return null;
+}
+
+export function totpUri({ secret, account, issuer = 'Fileready' }) {
+  return `otpauth://totp/${encodeURIComponent(`${issuer}:${account}`)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&period=30&digits=6&algorithm=SHA1`;
+}
+
+// AES-256-GCM with a key derived from the app's secret (APP_SECRET), so a
+// database copy alone can't be used to generate login codes.
+function keyFrom(appSecret) {
+  if (!appSecret || String(appSecret).length < 32) throw new Error('APP_SECRET must be set (32+ characters)');
+  return crypto.createHash('sha256').update(String(appSecret)).digest();
+}
+
+export function encryptSecret(plain, appSecret) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', keyFrom(appSecret), iv);
+  const ct = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
+  return `v1.${iv.toString('base64')}.${cipher.getAuthTag().toString('base64')}.${ct.toString('base64')}`;
+}
+
+export function decryptSecret(blob, appSecret) {
+  const [v, iv, tag, ct] = String(blob).split('.');
+  if (v !== 'v1') throw new Error('unknown secret format');
+  const d = crypto.createDecipheriv('aes-256-gcm', keyFrom(appSecret), Buffer.from(iv, 'base64'));
+  d.setAuthTag(Buffer.from(tag, 'base64'));
+  return Buffer.concat([d.update(Buffer.from(ct, 'base64')), d.final()]).toString('utf8');
+}
+
+export function newRecoveryCodes(n = 8) {
+  return Array.from({ length: n }, () => {
+    const s = base32Encode(crypto.randomBytes(8)).toLowerCase().slice(0, 12);
+    return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`;
+  });
+}
+
+export const normaliseRecovery = (code) => String(code ?? '').toLowerCase().replace(/[^a-z2-7]/g, '');
+
+// ---------------------------------------------------------------- phone numbers
+/** Irish-friendly normalisation to +<country><number>, or null if it can't be a mobile number. */
+export function normalisePhone(raw) {
+  let p = String(raw ?? '').replace(/[\s().-]/g, '');
+  if (p.startsWith('00')) p = `+${p.slice(2)}`;
+  else if (/^0\d{8,10}$/.test(p)) p = `+353${p.slice(1)}`;
+  return /^\+\d{9,15}$/.test(p) ? p : null;
+}

@@ -1,0 +1,26 @@
+<%- include('partials/head', { title: 'Search' }) %>
+<%- include('partials/nav') %>
+<div class="page-head"><div><h1>Search</h1>
+  <% if (term.length >= 2) { %><p><%= clients.length + cases.length %> results for “<%= term %>”</p><% } else { %><p>Type at least two letters of a name, email, phone number or lender.</p><% } %></div></div>
+<form method="get" action="/search" class="surface" style="padding:16px 20px;display:flex;gap:12px">
+  <input name="q" value="<%= term %>" placeholder="Search clients and cases" aria-label="Search" style="margin:0" autofocus>
+  <button class="btn">Search</button>
+</form>
+<% if (term.length >= 2) { %>
+<section class="surface">
+  <div class="surface-head"><h2>Clients</h2></div>
+  <% if (!clients.length) { %><p class="surface-body muted" style="margin:0">No clients match.</p><% } else { %>
+  <table class="ledger" style="margin-top:8px"><tbody>
+    <% for (const c of clients) { %><tr><td class="client-cell"><a href="/clients/<%= c.id %>"><%= c.first_name %> <%= c.last_name %></a><span class="sub"><%= c.email || '' %><% if (c.phone) { %><%= c.email ? ", " : "" %><%= c.phone %><% } %><% if (c.archived_at) { %> (archived)<% } %></span></td></tr><% } %>
+  </tbody></table><% } %>
+</section>
+<section class="surface">
+  <div class="surface-head"><h2>Cases</h2></div>
+  <% if (!cases.length) { %><p class="surface-body muted" style="margin:0">No cases match.</p><% } else { %>
+  <table class="ledger" style="margin-top:8px"><tbody>
+    <% for (const c of cases) { %><tr><td class="client-cell"><a href="/cases/<%= c.id %>"><%= c.first_name %> <%= c.last_name %></a><span class="sub"><%= c.title %><% if (c.lender) { %>, <%= c.lender %><% } %></span></td>
+      <td style="text-align:right"><span class="chip <%= c.status === 'complete' ? 'brass' : '' %>"><%= c.status === 'complete' ? 'File complete' : c.status[0].toUpperCase() + c.status.slice(1).replace('_', ' ') %></span></td></tr><% } %>
+  </tbody></table><% } %>
+</section>
+<% } %>
+<%- include('partials/foot') %>

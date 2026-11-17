@@ -1,0 +1,27 @@
+<%- include('partials/head', { title: 'Set up two-step login' }) %>
+<%- include('partials/nav') %>
+<a class="back" href="/account">← Account</a>
+<section class="surface form-surface">
+<% if (codes) { %>
+  <h1>Two-step login is on</h1>
+  <p class="muted">Save these recovery codes somewhere safe, such as your password manager. Each works once if you lose your phone. They won't be shown again.</p>
+  <ul class="codes num"><% for (const c of codes) { %><li><%= c %></li><% } %></ul>
+  <a class="btn" href="/account?f=on">I've saved them</a>
+<% } else { %>
+  <h1>Set up two-step login</h1>
+  <ol class="steps">
+    <li>Open an authenticator app on your phone, such as Google Authenticator or Microsoft Authenticator.</li>
+    <li>Scan this code, or type the key below.</li>
+    <li>Enter the 6-digit code the app shows.</li>
+  </ol>
+  <div class="qr"><%- qr %></div>
+  <p class="small muted">Key: <span class="num" style="color:var(--ink);font-weight:600"><%= secret %></span></p>
+  <% if (error) { %><p class="notice error" role="alert"><%= error %></p><% } %>
+  <form method="post" action="/account/2fa/setup">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <label>6-digit code <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></label>
+    <button class="btn">Turn on two-step login</button>
+  </form>
+<% } %>
+</section>
+<%- include('partials/foot') %>

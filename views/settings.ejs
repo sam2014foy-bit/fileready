@@ -12,6 +12,17 @@
     <label>Most emails per case <input type="number" name="max_reminders" min="1" max="20" value="<%= values.max_reminders %>" required></label>
   </div>
   <p class="hint">After the most emails per case, Fileready stops and flags the case so you can phone the client.</p>
+  <label class="inline" style="margin-bottom:6px"><input type="checkbox" name="sms_enabled" <%= values.sms_enabled ? 'checked' : '' %> <%= smsAvailable ? '' : 'disabled' %>> Also send reminders by text to clients with a mobile number</label>
+  <p class="hint" style="margin-top:4px"><%= smsAvailable ? 'Each text uses Brevo SMS credit. Clients can be excluded on their page.' : 'Text messages aren\'t set up on this server yet.' %></p>
+  <label>Who sees which cases
+    <select name="advisers_see_all">
+      <option value="all" <%= values.advisers_see_all ? 'selected' : '' %>>Everyone sees every case</option>
+      <option value="own" <%= values.advisers_see_all ? '' : 'selected' %>>Advisers see only their own cases</option>
+    </select>
+  </label>
+  <p class="hint">Owners and admin staff always see every case.</p>
+  <label>Keep closed cases for (years) <input type="number" name="retention_years" min="1" max="10" step="1" value="<%= Math.round((values.data_retention_days || 2190) / 365) %>" required></label>
+  <p class="hint">After this, a closed case and its files are deleted automatically.</p>
   <button class="btn">Save settings</button>
 </form>
 <%- include('partials/foot') %>

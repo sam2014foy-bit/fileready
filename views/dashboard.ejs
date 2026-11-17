@@ -11,6 +11,12 @@
     <% } %>
   </nav>
 </div>
+<div class="today" aria-label="Today">
+  <a href="/?show=review" class="today-item <%= filter === 'review' ? 'on' : '' %>"><b class="num"><%= counts.docs_to_review %></b><span>document<%= counts.docs_to_review === 1 ? '' : 's' %> to review</span></a>
+  <a href="/?show=stuck" class="today-item <%= filter === 'stuck' ? 'on' : '' %>"><b class="num"><%= counts.stuck %></b><span>client<%= counts.stuck === 1 ? '' : 's' %> not responding</span></a>
+  <a href="/?show=due" class="today-item <%= filter === 'due' ? 'on' : '' %>"><b class="num"><%= counts.due %></b><span>due within a week<% if (counts.overdue) { %>, <strong class="bad-text"><%= counts.overdue %> overdue</strong><% } %></span></a>
+</div>
+<% if (['review', 'stuck', 'due'].includes(filter)) { %><p class="small muted" style="margin:-8px 0 16px">Showing <%= { review: 'cases with documents to review', stuck: 'cases where chasing has stopped', due: 'cases due within a week' }[filter] %>. <a href="/">Show all open cases</a></p><% } %>
 <% if (!cases.length) { %>
   <div class="surface empty">
     <h2><%= filter === 'complete' ? 'No complete files yet' : filter === 'open' ? 'No open cases' : 'No cases yet' %></h2>
@@ -25,7 +31,8 @@
   <% for (const c of cases) { const pct = c.required_total ? Math.round(100 * c.required_done / c.required_total) : 0; %>
     <tr>
       <td class="client-cell"><a href="/cases/<%= c.id %>"><%= c.first_name %> <%= c.last_name %></a>
-        <span class="sub"><%= c.title %><% if (c.lender) { %>, <%= c.lender %><% } %></span></td>
+        <span class="sub"><%= c.title %><% if (c.lender) { %>, <%= c.lender %><% } %></span>
+        <% if (c.due_date && c.status === 'open') { const d = dateOnly(c.due_date); %><span class="chip <%= d < today ? 'bad' : 'plain' %>" style="margin-top:6px"><%= d < today ? 'Overdue' : 'Due' %> <%= formatDue(d).replace(/^\w+ /, '') %></span><% } %></td>
       <td><div class="meter" title="<%= c.required_done %> of <%= c.required_total %> required documents done"><span class="track"><span class="fill" style="width:<%= pct %>%"></span></span><span class="frac"><%= c.required_done %>/<%= c.required_total %></span></div></td>
       <td><% if (c.awaiting_review) { %><span class="chip warn"><%= c.awaiting_review %> to review</span><% } %>
           <% if (c.rejected) { %><span class="chip bad"><%= c.rejected %> rejected</span><% } %></td>

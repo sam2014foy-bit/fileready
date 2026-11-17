@@ -39,6 +39,7 @@
       </div>
       <label>Email <input type="email" name="email" value="<%= values.email || '' %>"></label>
       <label>Mobile <input type="tel" name="phone" value="<%= values.phone || '' %>"></label>
+      <label class="inline small" style="margin-bottom:16px"><input type="checkbox" name="sms_opt_out" <%= values.sms_opt_out ? 'checked' : '' %>> Don't send this client text messages</label>
       <button class="btn">Save details</button>
     </div>
   </form>

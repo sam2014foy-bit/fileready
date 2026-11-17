@@ -1,21 +1,25 @@
 <div class="shell">
   <aside class="side">
     <a class="wordmark" href="/"><%- include('mark') %><span>Fileready</span></a>
+    <form method="get" action="/search" class="side-search" role="search"><input name="q" placeholder="Search" aria-label="Search clients and cases"></form>
     <nav aria-label="Main">
       <a href="/" <%- (path === '/' || path.startsWith('/cases')) ? 'aria-current="page"' : '' %>>Cases</a>
       <a href="/clients" <%- path.startsWith('/clients') && path !== '/clients/new' ? 'aria-current="page"' : '' %>>Clients</a>
+      <a href="/checklists" <%- path.startsWith('/checklists') ? 'aria-current="page"' : '' %>>Checklists</a>
       <% if (user.role === 'owner') { %>
       <a href="/team" <%- path.startsWith('/team') ? 'aria-current="page"' : '' %>>Team</a>
       <a href="/settings" <%- path.startsWith('/settings') ? 'aria-current="page"' : '' %>>Settings</a>
+      <a href="/billing" <%- path.startsWith('/billing') ? 'aria-current="page"' : '' %>>Billing</a>
       <% } %>
     </nav>
     <div class="new"><a class="btn-new" href="/clients/new">+ New client</a></div>
     <div class="who">
       <div><strong><%= user.full_name %></strong><%= user.firm_name %></div>
       <div class="acts">
-        <a href="/account/password">Password</a>
+        <a href="/account">Account</a>
         <form method="post" action="/logout"><input type="hidden" name="_csrf" value="<%= csrf %>"><button>Log out</button></form>
       </div>
     </div>
   </aside>
   <main class="main">
+    <% if (typeof billingBanner !== 'undefined' && billingBanner) { %><p class="notice error" role="status"><%= billingBanner %> <a href="/billing">Go to billing</a></p><% } %>

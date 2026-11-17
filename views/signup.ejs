@@ -1,0 +1,18 @@
+<%- include('partials/head', { title: 'Start your free trial' }) %>
+<main class="plain-page">
+  <a class="wordmark" href="/login"><%- include('partials/mark') %><span>Fileready</span></a>
+  <h1>Start your free trial</h1>
+  <p><%= trialDays %> days free. No card needed to start.</p>
+  <% if (error) { %><p class="notice error" role="alert"><%= error %></p><% } %>
+  <form method="post" action="/signup" style="margin-top:24px">
+    <label>Firm name <input name="firm" value="<%= values.firm || '' %>" required></label>
+    <label>Your name <input name="full_name" value="<%= values.full_name || '' %>" autocomplete="name" required></label>
+    <label>Work email <input type="email" name="email" value="<%= values.email || '' %>" autocomplete="username" required></label>
+    <label>Password <input type="password" name="password" minlength="12" autocomplete="new-password" required></label>
+    <p class="hint">At least 12 characters.</p>
+    <label class="inline small" style="margin-bottom:16px"><input type="checkbox" name="terms" value="yes" required> I accept the terms and the <a href="/security">security and privacy</a> approach</label>
+    <button class="btn wide">Create my account</button>
+  </form>
+  <p class="small" style="margin-top:20px">Already have a login? <a href="/login">Log in</a></p>
+</main>
+</body></html>

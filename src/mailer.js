@@ -46,3 +46,34 @@ export function memoryMailer({ log = false } = {}) {
     },
   };
 }
+
+// Text messages. sms.send({ to, content, tag }).
+export function brevoSms({ apiKey, sender, fetchImpl = fetch }) {
+  if (!apiKey || !sender) throw new Error('brevoSms needs apiKey and sender');
+  return {
+    async send({ to, content, tag = 'fileready-reminder' }) {
+      const res = await fetchImpl('https://api.brevo.com/v3/transactionalSMS/send', {
+        method: 'POST',
+        headers: { 'api-key': apiKey, 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ sender: sender.slice(0, 11), recipient: to.replace(/^\+/, ''), content, type: 'transactional', tag }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) throw new Error(`Brevo SMS ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+      return res.json().catch(() => ({}));
+    },
+  };
+}
+
+export function memorySms({ log = false } = {}) {
+  const outbox = [];
+  return {
+    outbox,
+    failNext: false,
+    async send(message) {
+      if (this.failNext) { this.failNext = false; throw new Error('simulated SMS failure'); }
+      outbox.push({ ...message, sentAt: new Date() });
+      if (log) console.log(`\n[sms] to ${message.to}: ${message.content}\n`);
+      return { messageId: outbox.length };
+    },
+  };
+}

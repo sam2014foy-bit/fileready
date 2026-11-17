@@ -13,7 +13,16 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
  * @param {number} p.linkDays
  * @param {{label:string, help_text?:string, status:string, rejected_reason?:string, required:boolean}[]} p.items
  */
-export function reminderEmail({ kind, firstName, firmName, caseTitle, adviserName, link, linkDays, items }) {
+// Postgres DATE values arrive as a Date at local midnight (node-postgres, PGlite) or as 'YYYY-MM-DD'.
+export const dateOnly = (d) => {
+  if (!d) return null;
+  if (d instanceof Date) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return String(d).slice(0, 10);
+};
+export const formatDue = (d) => d ? new Date(`${dateOnly(d)}T12:00:00Z`).toLocaleDateString('en-IE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Dublin' }) : null;
+
+export function reminderEmail({ kind, firstName, firmName, caseTitle, adviserName, link, linkDays, items, dueDate = null }) {
+  const due = formatDue(dueDate);
   const rejected = items.filter((i) => i.status === 'rejected');
   const missing = items.filter((i) => i.status === 'requested');
   // Count what's required in subject lines; optional items are listed but marked "if it applies".
@@ -47,6 +56,7 @@ export function reminderEmail({ kind, firstName, firmName, caseTitle, adviserNam
     '',
     ...rejected.map(line),
     ...missing.map(line),
+    ...(due ? ['', `Please send them by ${due}.`] : []),
     '',
     `Upload here: ${link}`,
     '',
@@ -68,6 +78,7 @@ export function reminderEmail({ kind, firstName, firmName, caseTitle, adviserNam
 <p style="margin:0 0 14px">Hi ${esc(firstName)},</p>
 <p style="margin:0 0 18px">${esc(intro)}</p>
 <ul style="margin:0 0 24px;padding-left:20px">${[...rejected, ...missing].map(li).join('')}</ul>
+${due ? `<p style="margin:0 0 18px"><strong>Please send them by ${esc(due)}.</strong></p>` : ''}
 <p style="margin:0 0 24px"><a href="${esc(link)}" style="background:#0F3A44;color:#FFFFFF;padding:13px 22px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">Upload documents</a></p>
 <p style="margin:0 0 18px;color:#5E6B70;font-size:14px">This link is private to you and works for ${linkDays} days. ${esc(replyLine)}</p>
 <p style="margin:0">Thanks,<br>${esc(adviserName ? `${adviserName}` : firmName)}${adviserName ? `<br><span style="color:#5E6B70">${esc(firmName)}</span>` : ''}</p>
@@ -116,5 +127,26 @@ export function uploadAlertEmail({ adviserName, clientName, items, link }) {
     subject,
     text: `Hi ${adviserName},\n\n${clientName} has uploaded documents waiting for your review:\n${list.map((l) => `• ${l}`).join('\n')}\n\nReview them: ${link}`,
     html: frame('Documents to review', `<p style="margin:0 0 12px">Hi ${esc(adviserName)},</p><p style="margin:0 0 12px">${esc(clientName)} has uploaded documents waiting for your review:</p><ul style="margin:0;padding-left:20px">${list.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>${button(link, 'Review documents')}`, 'You get at most one of these every 30 minutes per case.'),
+  };
+}
+
+
+export function reminderSms({ firstName, firmName, outstanding, link, rejected }) {
+  const what = rejected ? 'needs you to re-upload a document' : `still needs ${outstanding} document${outstanding === 1 ? '' : 's'}`;
+  return `Hi ${firstName}, ${firmName} ${what} for your application. Upload securely: ${link}`;
+}
+
+export function dailySummaryEmail({ name, firmName, toReview, notResponding, overdue, received, link }) {
+  const n = toReview.length + notResponding.length + overdue.length;
+  const subject = n ? `Fileready: ${toReview.length} to review, ${notResponding.length + overdue.length} need attention` : 'Fileready: nothing needs you today';
+  const section = (title, rows) => rows.length
+    ? `<h2 style="margin:20px 0 8px;font:600 15px -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">${esc(title)}</h2><ul style="margin:0;padding-left:20px">${rows.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>` : '';
+  const textSection = (title, rows) => rows.length ? `\n${title}\n${rows.map((r) => `• ${r}`).join('\n')}\n` : '';
+  const rec = received ? `${received} document${received === 1 ? '' : 's'} came in since yesterday.` : 'No new documents came in since yesterday.';
+  return {
+    subject,
+    text: `Good morning ${name},\n\n${rec}\n${textSection('To review', toReview)}${textSection('Not responding', notResponding)}${textSection('Overdue', overdue)}\nOpen Fileready: ${link}`,
+    html: frame(`Good morning ${name}`, `<p style="margin:0">${esc(rec)}</p>${section('To review', toReview)}${section('Not responding to reminders', notResponding)}${section('Past their due date', overdue)}${button(link, 'Open Fileready')}`,
+      `${firmName}. You can turn this email off on your Account page.`),
   };
 }

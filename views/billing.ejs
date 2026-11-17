@@ -1,0 +1,19 @@
+<%- include('partials/head', { title: 'Billing' }) %>
+<%- include('partials/nav') %>
+<section class="surface form-surface">
+  <h1>Billing</h1>
+  <% if (flash) { %><p class="notice ok" role="status"><%= flash.text %></p><% } %>
+  <% const label = { none: 'No subscription', trial: 'Free trial', active: 'Active', past_due: 'Payment failed', cancelled: 'Cancelled' }[firm.billing_status]; %>
+  <p>Status: <span class="chip <%= { active: 'good', past_due: 'bad', trial: 'brass' }[firm.billing_status] || '' %>"><%= label %></span>
+    <% if (firm.billing_status === 'trial' && firm.trial_ends_at) { %><span class="muted small"> until <%= new Date(firm.trial_ends_at).toLocaleDateString('en-IE', { day: 'numeric', month: 'long', year: 'numeric' }) %></span><% } %></p>
+  <% if (!available) { %>
+    <p class="muted">Online payment isn't set up yet. Contact Fileready to arrange your subscription.</p>
+  <% } else if (['active', 'past_due'].includes(firm.billing_status) && firm.stripe_customer_id) { %>
+    <p class="muted">Update your card, download invoices or cancel in Stripe's secure billing page.</p>
+    <form method="post" action="/billing/portal"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn">Manage billing</button></form>
+  <% } else { %>
+    <p class="muted">Pay by card through Stripe. Cancel any time.</p>
+    <form method="post" action="/billing/checkout"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn">Start subscription</button></form>
+  <% } %>
+</section>
+<%- include('partials/foot') %>

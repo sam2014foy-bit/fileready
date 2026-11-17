@@ -1,0 +1,15 @@
+<%- include('partials/head', { title: t ? 'Edit checklist' : 'New checklist' }) %>
+<%- include('partials/nav') %>
+<a class="back" href="/checklists">← Checklists</a>
+<form method="post" action="<%= t ? '/checklists/' + t.id : '/checklists' %>" class="surface form-surface" style="max-width:720px">
+  <h1><%= t ? 'Edit checklist' : 'New checklist' %></h1>
+  <% if (error) { %><p class="notice error" role="alert"><%= error %></p><% } %>
+  <input type="hidden" name="_csrf" value="<%= csrf %>">
+  <label>Name <input name="name" value="<%= values.name %>" placeholder="e.g. Self-employed mortgage" required></label>
+  <label>Documents, one per line
+    <textarea name="items" rows="14" required placeholder="Photo ID | Passport or driving licence, in date&#10;Last 2 years' accounts&#10;(optional) Gift letter"><%= values.items %></textarea>
+  </label>
+  <p class="hint">Add a hint for the client after a <strong>|</strong>. Start a line with <strong>(optional)</strong> for documents that only apply to some clients.</p>
+  <button class="btn"><%= t ? 'Save checklist' : 'Create checklist' %></button>
+</form>
+<%- include('partials/foot') %>

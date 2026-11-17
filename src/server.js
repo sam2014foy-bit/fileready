@@ -13,13 +13,22 @@
 //   BREVO_API_KEY, SENDER_EMAIL (a sender verified in Brevo)
 // Reminders:
 //   REMINDERS_SECRET       shared with the scheduler that calls /internal/reminders/run
+// Text messages (optional, Brevo SMS credit and a registered sender ID):
+//   BREVO_SMS_SENDER       up to 11 letters/numbers, e.g. Fileready
+// Two-step login:
+//   APP_SECRET             32+ random characters, used to encrypt authenticator keys. Never change it once set.
+// Billing (optional, Stripe):
+//   STRIPE_SECRET_KEY, STRIPE_PRICE_ID, STRIPE_WEBHOOK_SECRET
+// Sign-up:
+//   ALLOW_SIGNUP           'true' to let new firms sign up for a free trial (off by default)
+//   TRIAL_DAYS             default 30
 // Web:
 //   BASE_URL               optional on Render (RENDER_EXTERNAL_URL is used)
 import pg from 'pg';
 import { createApp } from './app.js';
 import { createDb, pgDriver } from './db.js';
 import { localDiskStorage, s3Storage } from './storage.js';
-import { brevoMailer, memoryMailer } from './mailer.js';
+import { brevoMailer, memoryMailer, brevoSms } from './mailer.js';
 
 const env = process.env;
 const baseUrl = env.BASE_URL || env.RENDER_EXTERNAL_URL;
@@ -73,6 +82,20 @@ if (env.BREVO_API_KEY && env.SENDER_EMAIL) {
   console.warn('BREVO_API_KEY / SENDER_EMAIL not set: emails are only written to the log, not sent.');
   mailer = memoryMailer({ log: true });
 }
+let sms = null;
+if (env.BREVO_API_KEY && env.BREVO_SMS_SENDER) sms = brevoSms({ apiKey: env.BREVO_API_KEY.trim(), sender: env.BREVO_SMS_SENDER.trim() });
+else console.warn('BREVO_SMS_SENDER not set: text-message reminders are unavailable.');
+
+let stripe = null;
+if (env.STRIPE_SECRET_KEY) {
+  const { default: Stripe } = await import('stripe');
+  stripe = new Stripe(env.STRIPE_SECRET_KEY.trim());
+  if (!env.STRIPE_PRICE_ID || !env.STRIPE_WEBHOOK_SECRET) console.warn('STRIPE_PRICE_ID / STRIPE_WEBHOOK_SECRET not set: billing is incomplete.');
+} else console.warn('STRIPE_SECRET_KEY not set: billing is switched off.');
+
+const appSecret = env.APP_SECRET?.trim() || null;
+if (!appSecret || appSecret.length < 32) console.warn('APP_SECRET missing or under 32 characters: two-step login is unavailable.');
+
 if (!env.REMINDERS_SECRET) console.warn('REMINDERS_SECRET not set: scheduled reminders are switched off.');
 
 // Fail fast if the database login is wrong.
@@ -80,8 +103,13 @@ try {
   const db = createDb(pgDriver(pool));
   await db.asApp((q) => q('SELECT 1'));
   const app = createApp({
-    db, storage, mailer,
-    config: { baseUrl, secureCookies: baseUrl.startsWith('https://'), remindersSecret: env.REMINDERS_SECRET?.trim() || null },
+    db, storage, mailer, sms, stripe,
+    config: {
+      baseUrl, secureCookies: baseUrl.startsWith('https://'), remindersSecret: env.REMINDERS_SECRET?.trim() || null,
+      appSecret: appSecret && appSecret.length >= 32 ? appSecret : null,
+      allowSignup: env.ALLOW_SIGNUP === 'true', trialDays: Number(env.TRIAL_DAYS || 30),
+      stripePriceId: env.STRIPE_PRICE_ID?.trim() || null, stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET?.trim() || null,
+    },
   });
   const port = Number(env.PORT || 3000);
   app.listen(port, () => console.log(`Fileready listening on ${port} as ${baseUrl}`));

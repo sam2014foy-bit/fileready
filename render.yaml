@@ -33,3 +33,15 @@ services:
         sync: false
       - key: REMINDERS_SECRET
         sync: false
+      - key: APP_SECRET
+        sync: false
+      - key: BREVO_SMS_SENDER
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: ALLOW_SIGNUP
+        sync: false

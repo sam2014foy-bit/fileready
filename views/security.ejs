@@ -1,0 +1,37 @@
+<%- include('partials/head', { title: 'Security and privacy' }) %>
+<main class="client-page" style="max-width:760px">
+  <div class="client-top"><a class="wordmark" href="/login" style="color:var(--petrol);padding:0"><%- include('partials/mark') %><span style="color:var(--ink)">Fileready</span></a></div>
+  <h1 style="margin-bottom:12px">Security and privacy</h1>
+  <p class="muted" style="margin:0 0 32px">How Fileready looks after your clients' documents. Last updated 17 November 2026.</p>
+  <section class="surface"><div class="surface-body prose">
+    <h2>Where data is kept</h2>
+    <p>Client records and uploaded documents are stored with Supabase in its West EU (Ireland) region. The web app runs with Render in Frankfurt, Germany. Emails and text messages are sent through Brevo, which is based in France. All of these are within the EU.</p>
+    <h2>Who can see it</h2>
+    <p>Each firm's data is kept apart inside the database itself, so one firm can never see another's clients, even if there were a fault in the app. Within a firm, owners can choose whether advisers see every case or only their own. Uploaded files are in a private store and are only ever handed to logged-in staff of the firm that requested them.</p>
+    <h2>How it's protected</h2>
+    <ul>
+      <li>Every connection uses HTTPS encryption.</li>
+      <li>Passwords are stored only in scrambled form (scrypt), never readable.</li>
+      <li>Two-step login with an authenticator app is available for every user.</li>
+      <li>Repeated wrong passwords lock the login for 15 minutes.</li>
+      <li>Client upload links are private, expire after 14 days, and are replaced each time a reminder goes out.</li>
+      <li>Uploads are checked by their contents and only PDFs and photos are accepted.</li>
+    </ul>
+    <h2>A record of everything</h2>
+    <p>Fileready keeps an audit trail of who did what and when: uploads, downloads, reviews, reminders, logins and deletions. Entries can't be edited or deleted.</p>
+    <h2>How long data is kept</h2>
+    <p>Each firm sets how long closed cases are kept, from 1 to 10 years. When that time passes, the case and its files are deleted automatically. A firm can also delete a client and every file straight away, for example when the client asks.</p>
+    <h2>Being your data processor</h2>
+    <p>Your firm decides what's collected and why. Fileready processes it on your behalf. A data processing agreement is available for every firm before any client data is added.</p>
+    <h2>Services we use</h2>
+    <ul>
+      <li>Supabase: database and file storage, Ireland</li>
+      <li>Render: web hosting, Germany</li>
+      <li>Brevo: email and text message delivery, France</li>
+      <li>Stripe: subscription payments (firms' card details only, never client data)</li>
+    </ul>
+    <h2>Questions</h2>
+    <p>Ask us anything about how your data is handled before you sign up. We'll answer in writing.</p>
+  </div></section>
+</main>
+</body></html>
