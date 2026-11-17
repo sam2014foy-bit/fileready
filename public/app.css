@@ -364,10 +364,6 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 textarea { display: block; width: 100%; margin-top: 6px; padding: 10px 12px; font: 400 15px/1.5 var(--sans); color: var(--ink);
   background: var(--paper); border: 1px solid var(--mist-strong); border-radius: var(--r-control); resize: vertical; }
 textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; box-shadow: none; }
-.side-search { margin: 24px 0 -16px; }
-.side-search input { height: 38px; margin: 0; background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); color: #fff; font-size: 14px; }
-.side-search input::placeholder { color: rgba(243,244,241,.6); }
-.side-search input:focus { background: rgba(255,255,255,.12); border-color: var(--emerald); box-shadow: none; }
 .today { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; }
 .today-item { display: flex; align-items: baseline; gap: 10px; padding: 18px 20px; background: var(--paper); border: 1px solid var(--mist);
   border-radius: var(--r-surface); text-decoration: none; color: var(--slate); transition: border-color .15s ease; }
@@ -412,15 +408,14 @@ ul.codes { list-style: none; padding: 16px; margin: 16px 0 24px; background: var
 /* ---------- phones and tablets: compact top bar instead of the sidebar ---------- */
 @media (max-width: 960px) {
   .side { display: grid; grid-template-columns: 1fr auto; gap: 12px 12px; padding: 14px 16px 10px; }
-  .side .wordmark { grid-column: 1; grid-row: 1; padding: 0; }
+  .side .side-top { grid-column: 1; grid-row: 1; }
+  .side .wordmark { padding: 0; }
   .side .new { grid-column: 2; grid-row: 1; margin: 0; }
-  .side-search { grid-column: 1 / -1; grid-row: 2; margin: 0; }
-  .side-search input { height: 42px; }
-  .side nav { grid-column: 1 / -1; grid-row: 3; flex-direction: row; gap: 4px; margin: 0 -16px; padding: 0 16px 2px;
+  .side nav { grid-column: 1 / -1; grid-row: 2; flex-direction: row; gap: 4px; margin: 0 -16px; padding: 0 16px 2px;
     overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; min-width: 0; }
   .side nav::-webkit-scrollbar { display: none; }
   .side nav a { flex: none; padding: 10px 12px; }
-  .side .who { grid-column: 1 / -1; grid-row: 4; margin: 0; padding: 10px 0 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .side .who { grid-column: 1 / -1; grid-row: 3; margin: 0; padding: 10px 0 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .side .who > div:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .side .who .acts { margin: 0; flex: none; }
   .main { min-width: 0; }
@@ -498,7 +493,6 @@ button[aria-busy="true"] { opacity: .7; cursor: progress; }
 .side nav a[aria-current="page"]::before { background: var(--mint); }
 .side .btn-new { border-radius: var(--radius-pill); border-color: rgba(234, 244, 239, .28); color: var(--on-evergreen); }
 .side .who strong, .wordmark, .wordmark:hover { color: var(--on-evergreen); }
-.side-search input:focus { border-color: var(--mint); }
 
 /* Wordmark: lowercase name in Schibsted Grotesk */
 .wordmark span, .h-word span { font-family: var(--display); font-weight: 700; letter-spacing: -0.02em; text-transform: lowercase; }
@@ -551,3 +545,9 @@ input:focus, select:focus, textarea:focus { box-shadow: none; }
 /* Reserved: the founding-firm offer badge (the only place brass appears) */
 .offer-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--radius-pill);
   background: var(--brass-soft); color: var(--brass); font: 600 12px/16px var(--sans); }
+
+/* Search: a small icon beside the logo, opening the search page */
+.side-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.side-search-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: none;
+  border-radius: var(--radius-pill); color: var(--on-evergreen-muted); text-decoration: none; }
+.side-search-btn:hover, .side-search-btn[aria-current="page"] { color: var(--on-evergreen); background: rgba(234, 244, 239, .1); }
