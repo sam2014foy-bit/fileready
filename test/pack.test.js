@@ -554,3 +554,73 @@ test('website stats count people on public pages (not bots, not staff) without c
   assert.equal((await adv.agent.get('/admin/stats')).status, 404, 'non-admins get not found');
   assert.ok(!(await adv.agent.get('/')).text.includes('/admin/stats'), 'no nav link for non-admins');
 });
+
+// ------------------------------------------------------------- security review fixes
+test('the real visitor address comes from the edge header when configured, and fake values are ignored', async () => {
+  const site = createApp({ db, storage: localDiskStorage(storageDir), mailer, config: { baseUrl: BASE, clientIpHeader: 'true-client-ip', contactEmail: 'h@x.ie', formMinMs: 0 } });
+  // Five demo requests from one address hit the limit, but a different real address is unaffected.
+  for (let i = 0; i < 5; i++) {
+    await request(site).post('/demo').set('True-Client-IP', '203.0.113.7').type('form').send({ _t: await formT(site, '/demo'), name: 'A', firm: 'B', email: `a${i}@b.ie` });
+  }
+  const blocked = await request(site).post('/demo').set('True-Client-IP', '203.0.113.7').type('form').send({ _t: await formT(site, '/demo'), name: 'A', firm: 'B', email: 'z@b.ie' });
+  assert.equal(blocked.status, 429);
+  const other = await request(site).post('/demo').set('True-Client-IP', '198.51.100.9').type('form').send({ _t: await formT(site, '/demo'), name: 'C', firm: 'D', email: 'c@d.ie' });
+  assert.equal(other.status, 200, 'a different visitor is not blocked by someone else');
+  const junk = await request(site).post('/demo').set('True-Client-IP', 'not-an-ip, 1.2.3.4').type('form').send({ _t: await formT(site, '/demo'), name: 'E', firm: 'F', email: 'e@f.ie' });
+  assert.equal(junk.status, 200, 'invalid header falls back to the connection address');
+});
+
+test('login: password spraying from one address is stopped even across different emails', async () => {
+  const site = createApp({ db, storage: localDiskStorage(storageDir), mailer, config: { baseUrl: BASE, clientIpHeader: 'true-client-ip' } });
+  for (let i = 0; i < 30; i++) {
+    await request(site).post('/login').set('True-Client-IP', '203.0.113.50').type('form').send({ email: `nobody${i}@spray.test`, password: 'Winter2026!!' });
+  }
+  const res = await request(site).post('/login').set('True-Client-IP', '203.0.113.50').type('form').send({ email: 'owner@cork.test', password: PW });
+  assert.equal(res.status, 429, 'that address is paused, even with the right password');
+  const elsewhere = await request(site).post('/login').set('True-Client-IP', '198.51.100.20').type('form').send({ email: 'owner@cork.test', password: PW });
+  assert.equal(elsewhere.status, 302, 'the real owner, from their own address, still gets in');
+});
+
+test('security headers: no framing, and form posts may only go to us or Stripe', async () => {
+  const res = await request(app).get('/login');
+  const csp = res.headers['content-security-policy'];
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.match(csp, /form-action 'self' https:\/\/checkout\.stripe\.com https:\/\/billing\.stripe\.com/);
+  assert.match(csp, /script-src 'self'/);
+  assert.equal(res.headers['x-frame-options'], 'DENY');
+  assert.match(res.headers['strict-transport-security'], /max-age=/);
+  assert.equal(res.headers['x-content-type-options'], 'nosniff');
+});
+
+test('uploads: a bad link is refused before the file is read, and each document has a file limit', async () => {
+  const big = Buffer.alloc(2 * 1024 * 1024, 1);
+  const bad = await request(app).post(`/u/${'x'.repeat(43)}/${s.reqs[0].id}`).attach('file', big, 'x.pdf');
+  assert.equal(bad.status, 404);
+  const fresh = await s.owner.post(`/cases/${s.ownerCase.caseId}/links`);
+  const tok = fresh.text.match(/\/u\/([A-Za-z0-9_-]{43})/)[1];
+  const rid = (await q1(`SELECT id FROM document_requests WHERE case_id = $1 AND status IN ('requested', 'received', 'rejected') ORDER BY sort_order DESC LIMIT 1`, [s.ownerCase.caseId])).id;
+  const have = (await q1('SELECT count(*)::int AS n FROM documents WHERE request_id = $1', [rid])).n;
+  let last;
+  for (let i = have; i < 16; i++) last = await request(app).post(`/u/${tok}/${rid}`).attach('file', PDF, `p${i}.pdf`);
+  assert.equal(last.status, 400);
+  assert.match(last.text, /most files Fileready can take/);
+  assert.equal((await q1('SELECT count(*)::int AS n FROM documents WHERE request_id = $1', [rid])).n, 15);
+});
+
+test('uploads: only a few run at once; extra ones are asked to retry', async () => {
+  const site = createApp({ db, storage: localDiskStorage(storageDir), mailer, config: { baseUrl: BASE, maxConcurrentUploads: 0 } });
+  const fresh = await s.owner.post(`/cases/${s.ownerCase.caseId}/links`);
+  const tok = fresh.text.match(/\/u\/([A-Za-z0-9_-]{43})/)[1];
+  const res = await request(site).post(`/u/${tok}/${s.reqs[1].id}`).attach('file', PDF, 'a.pdf');
+  assert.equal(res.status, 503);
+  assert.equal(res.headers['retry-after'], '10');
+  assert.match(res.text, /busy for a moment/);
+});
+
+test('helper database functions are not callable by public roles', async () => {
+  const rows = (await pglite.query(`SELECT p.proname, has_function_privilege('public', p.oid, 'EXECUTE') AS pub
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public'
+    AND p.proname IN ('current_firm_id', 'set_updated_at', 'audit_log_block_changes', 'refresh_case_completion', 'current_app_user', 'app_restricted')`)).rows;
+  assert.ok(rows.length >= 6);
+  assert.ok(rows.every((r) => !r.pub), JSON.stringify(rows));
+});

@@ -37,7 +37,7 @@ export function createStats({ db, siteHost }) {
         res.on('finish', () => {
           if (res.statusCode !== 200 || req.user) return;
           const today = dublinDay(); rotate(today);
-          const h = crypto.createHmac('sha256', salt).update(`${req.ip}|${ua}`).digest('base64url').slice(0, 22);
+          const h = crypto.createHmac('sha256', salt).update(`${req.clientIp || req.ip}|${ua}`).digest('base64url').slice(0, 22);
           const isNew = !seen.has(h); if (isNew) seen.add(h);
           let referrer = '';
           try { const r = new URL(req.get('referer') || ''); if (r.hostname !== siteHost) referrer = r.hostname.replace(/^www\./, '').slice(0, 100); } catch { /* none */ }

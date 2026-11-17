@@ -1,6 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import compression from 'compression';
+import net from 'node:net';
 import { createStats } from './stats.js';
 import { createSpamGuard } from './spam.js';
 import cookieParser from 'cookie-parser';
@@ -24,6 +25,8 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SESSION_COOKIE = 'fr_session';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+const MAX_FILES_PER_ITEM = 15;   // e.g. 12 months of statements, plus a few re-sends
+const MAX_FILES_PER_CASE = 150;
 
 /**
  * @param {object} opts
@@ -34,15 +37,24 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 export function createApp({ db, storage, mailer, sms = null, stripe = null, config }) {
   const cfg = {
     sessionHours: 12, linkDays: 14, secureCookies: false, remindersSecret: null, devOutbox: false,
-    appSecret: null, allowSignup: false, contactEmail: null, adminEmails: [], formMinMs: 3000, legalName: null, legalAddress: null, privacyEmail: null, trialDays: 30, stripePriceId: null, stripeWebhookSecret: null, ...config,
+    appSecret: null, allowSignup: false, contactEmail: null, adminEmails: [], formMinMs: 3000, clientIpHeader: null, maxConcurrentUploads: 4, legalName: null, legalAddress: null, privacyEmail: null, trialDays: 30, stripePriceId: null, stripeWebhookSecret: null, ...config,
   };
   const app = express();
   const limiter = createLoginLimiter();
+  const ipLimiter = createLoginLimiter({ max: 30, windowMs: 15 * 60 * 1000 });      // failures from one address, any account
+  const accountLimiter = createLoginLimiter({ max: 50, windowMs: 60 * 60 * 1000 }); // failures on one account, any address
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 5 } });
 
   app.set('view engine', 'ejs');
   app.set('views', path.join(ROOT, 'views'));
   app.set('trust proxy', 1);
+  // The visitor's real address. On Render, Cloudflare sets True-Client-IP and
+  // visitors can't fake it; X-Forwarded-For can be faked, so it isn't used.
+  app.use((req, res, next) => {
+    const h = cfg.clientIpHeader ? String(req.get(cfg.clientIpHeader) || '').trim() : '';
+    req.clientIp = net.isIP(h) ? h : req.ip;
+    next();
+  });
   app.use(compression());
   const stats = createStats({ db, siteHost: new URL(cfg.baseUrl).hostname });
   const spam = createSpamGuard({ secret: cfg.appSecret || cfg.remindersSecret || cfg.stripeWebhookSecret, minMs: cfg.formMinMs });
@@ -55,7 +67,8 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
   // posts under 'no-referrer' (helmet's default), which the check below would
   // reject. 'same-origin' still never leaks upload-link URLs to other sites.
   app.use(helmet({
-    contentSecurityPolicy: { directives: { 'form-action': ["'self'"] } },
+    contentSecurityPolicy: { directives: { 'form-action': ["'self'", 'https://checkout.stripe.com', 'https://billing.stripe.com'], 'frame-ancestors': ["'none'"] } },
+    frameguard: { action: 'deny' },
     referrerPolicy: { policy: 'same-origin' },
   }));
   app.use('/static', express.static(path.join(ROOT, 'public'), { maxAge: '30d' }));
@@ -157,7 +170,7 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
   const setSessionCookie = (res, token) => res.cookie(SESSION_COOKIE, token, {
     httpOnly: true, sameSite: 'strict', secure: cfg.secureCookies, maxAge: cfg.sessionHours * 3600 * 1000, path: '/',
   });
-  const actor = (req) => ({ firmId: req.user.firm_id, actorType: 'user', userId: req.user.user_id, ip: req.ip });
+  const actor = (req) => ({ firmId: req.user.firm_id, actorType: 'user', userId: req.user.user_id, ip: req.clientIp });
 
   // ---------------------------------------------------------------- auth
   app.get('/login', (req, res) => (req.user ? res.redirect('/') : res.render('login', {
@@ -167,16 +180,17 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
   app.post('/login', async (req, res) => {
     const email = String(req.body.email || '').trim().toLowerCase().slice(0, 200);
     const password = String(req.body.password || '').slice(0, 200);
-    const key = `${req.ip}|${email}`;
+    const key = `${req.clientIp}|${email}`;
     const fail = (status = 401, error = 'Email or password is wrong.') => res.status(status).render('login', { error, email, notice: null });
 
-    if (limiter.blocked(key)) return fail(429, 'Too many attempts. Wait 15 minutes and try again.');
+    const ipKey = `ip|${req.clientIp}`, acctKey = `acct|${email}`;
+    if (limiter.blocked(key) || ipLimiter.blocked(ipKey) || accountLimiter.blocked(acctKey)) return fail(429, 'Too many attempts. Wait 15 minutes and try again.');
     const [found] = await db.asApp((q) => q('SELECT * FROM auth_find_user($1)', [email]));
     const ok = found && !found.disabled && found.password_hash
       ? await verifyPassword(password, found.password_hash)
       : await burnPasswordCheck(password);
     if (!ok) {
-      limiter.fail(key);
+      limiter.fail(key); ipLimiter.fail(ipKey); accountLimiter.fail(acctKey);
       return fail();
     }
     limiter.reset(key);
@@ -186,7 +200,7 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     await db.asApp((q) => q('SELECT session_create_v2($1, $2, $3, $4)', [sha256(token), found.user_id, cfg.sessionHours, twoStep]));
     if (!twoStep) {
       await db.asFirm(found.firm_id, (q) =>
-        audit(q, { firmId: found.firm_id, actorType: 'user', userId: found.user_id, action: 'user.login', entityType: 'user', entityId: found.user_id, ip: req.ip })
+        audit(q, { firmId: found.firm_id, actorType: 'user', userId: found.user_id, action: 'user.login', entityType: 'user', entityId: found.user_id, ip: req.clientIp })
       );
     }
     setSessionCookie(res, token);
@@ -313,7 +327,7 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     if (verdict === 'stale') return again(400, 'This form was open for a long time. Please check your details and press "Request a demo" again.');
     if (!v.name || !v.firm) return again(400, 'Please add your name and firm.');
     if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(v.email)) return again(400, 'Please check your email address.');
-    const key = `demo:${req.ip}`;
+    const key = `demo:${req.clientIp}`;
     if (demoLimiter.blocked(key)) return again(429, 'Too many requests from this connection. Try again in an hour.');
     demoLimiter.fail(key);
     const lines = [`Name: ${v.name}`, `Firm: ${v.firm}`, `Email: ${v.email}`, `Phone: ${v.phone || '-'}`, '', v.message || '(no message)'];
@@ -861,7 +875,7 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
 
   app.post('/forgot', async (req, res) => {
     const email = String(req.body.email || '').trim().toLowerCase().slice(0, 200);
-    const key = `forgot|${req.ip}`;
+    const key = `forgot|${req.clientIp}`;
     if (limiter.blocked(key)) return res.status(429).render('forgot', { sent: false, error: 'Too many requests. Wait 15 minutes and try again.' });
     limiter.fail(key);
     if (spam.check(req.body) === 'bot') return res.render('forgot', { sent: true, error: null });
@@ -1032,7 +1046,7 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     }
     limiter.reset(key);
     await db.asApp((q) => q('SELECT session_mfa_complete($1, $2)', [sha256(req.sessionToken), cfg.sessionHours]));
-    await db.asFirm(p.firm_id, (q) => audit(q, { firmId: p.firm_id, actorType: 'user', userId: p.user_id, action: ok === 'recovery' ? 'user.login_recovery_code' : 'user.login', entityType: 'user', entityId: p.user_id, ip: req.ip }));
+    await db.asFirm(p.firm_id, (q) => audit(q, { firmId: p.firm_id, actorType: 'user', userId: p.user_id, action: ok === 'recovery' ? 'user.login_recovery_code' : 'user.login', entityType: 'user', entityId: p.user_id, ip: req.clientIp }));
     res.redirect(303, '/');
   });
 
@@ -1309,7 +1323,7 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     const v = { firm: clean(req.body.firm, 120), full_name: clean(req.body.full_name, 100), email: clean(req.body.email, 200).toLowerCase() };
     const password = String(req.body.password || '').slice(0, 200);
     const fail = (status, error) => res.status(status).render('signup', { error, values: v, trialDays: cfg.trialDays });
-    const key = `signup|${req.ip}`;
+    const key = `signup|${req.clientIp}`;
     if (limiter.blocked(key)) return fail(429, 'Too many sign-ups from here. Try again later.');
     const verdict = spam.check(req.body);
     if (verdict === 'bot') { stats.event('spam_blocked'); return fail(400, 'Something went wrong. Please try again.'); }
@@ -1388,15 +1402,34 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     res.render('upload', { ...(await loadUploadPage(link)), token: req.params.token, message: req.query.done ? 'Thanks, your file was received.' : null, error: null });
   });
 
-  app.post('/u/:token/:rid', (req, res, next) => {
+  // Uploads are held in memory while checked, so: check the link first, cap
+  // uploads per link and per address, and limit how many run at once.
+  const uploadLinkLimiter = createLoginLimiter({ max: 60, windowMs: 60 * 60 * 1000 });
+  const uploadIpLimiter = createLoginLimiter({ max: 120, windowMs: 60 * 60 * 1000 });
+  let uploadsInFlight = 0;
+  app.post('/u/:token/:rid', async (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    const link = await resolveLink(req.params.token);
+    if (!link) return res.status(404).render('upload_invalid');
+    req.link = link;
+    if (uploadLinkLimiter.blocked(`link|${link.link_id}`) || uploadIpLimiter.blocked(`ip|${req.clientIp}`)) {
+      return loadUploadPage(link).then((page) => res.status(429).render('upload', { ...page, token: req.params.token, message: null, error: 'That\'s a lot of uploads in a short time. Please wait a little while and try again.' }));
+    }
+    if (uploadsInFlight >= cfg.maxConcurrentUploads) {
+      res.set('Retry-After', '10');
+      return loadUploadPage(link).then((page) => res.status(503).render('upload', { ...page, token: req.params.token, message: null, error: 'Fileready is busy for a moment. Please try that upload again in a few seconds.' }));
+    }
+    uploadLinkLimiter.fail(`link|${link.link_id}`); uploadIpLimiter.fail(`ip|${req.clientIp}`);
+    uploadsInFlight++;
+    let released = false;
+    const release = () => { if (!released) { released = true; uploadsInFlight--; } };
+    res.on('finish', release); res.on('close', release);
     upload.single('file')(req, res, (err) => {
       if (err) req.uploadError = err.code === 'LIMIT_FILE_SIZE' ? 'That file is over 25 MB. Try a smaller scan or photo.' : 'Upload failed. Please try again.';
       next();
     });
   }, async (req, res) => {
-    res.set('Cache-Control', 'no-store');
-    const link = await resolveLink(req.params.token);
-    if (!link) return res.status(404).render('upload_invalid');
+    const link = req.link;
     const showError = async (error) =>
       res.status(400).render('upload', { ...(await loadUploadPage(link)), token: req.params.token, message: null, error });
 
@@ -1414,6 +1447,10 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
         [req.params.rid, link.case_id]
       );
       if (!r || ['accepted', 'waived'].includes(r.status)) return false;
+      const [{ item, total }] = await q(
+        `SELECT count(*) FILTER (WHERE d.request_id = $1)::int AS item, count(*)::int AS total
+           FROM documents d JOIN document_requests dr ON dr.id = d.request_id WHERE dr.case_id = $2`, [r.id, link.case_id]);
+      if (item >= MAX_FILES_PER_ITEM || total >= MAX_FILES_PER_CASE) return 'full';
       // Write the file first; if the database insert then fails, the
       // transaction rolls back and the orphan file is harmless.
       await storage.put(storageKey, req.file.buffer, type.mime);
@@ -1426,10 +1463,11 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
       await q(`UPDATE document_requests SET status = 'received', rejected_reason = NULL WHERE id = $1 AND status IN ('requested', 'rejected')`, [r.id]);
       await audit(q, {
         firmId: link.firm_id, actorType: 'client', action: 'document.uploaded', entityType: 'document', entityId: docId,
-        details: { case_id: link.case_id, request_id: r.id, size_bytes: req.file.size, link_id: link.link_id }, ip: req.ip,
+        details: { case_id: link.case_id, request_id: r.id, size_bytes: req.file.size, link_id: link.link_id }, ip: req.clientIp,
       });
       return true;
     });
+    if (saved === 'full') return showError('That\'s the most files Fileready can take for this. If you need to send more, please contact your broker.');
     if (!saved) return showError('That item no longer needs a file.');
     notifyAdviser(link).catch((err) => console.error('Upload alert failed:', err.message));
     res.redirect(303, `/u/${req.params.token}?done=${req.params.rid}`);
@@ -1438,7 +1476,7 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
   // -------------------------------------------------------------- errors
   app.use((req, res) => res.status(404).render('not_found'));
   app.use((err, req, res, _next) => {
-    console.error(err);
+    console.error(`${req.method} ${req.path} failed:`, err.code || '', err.message, err.stack?.split('\n')[1]?.trim() || '');
     res.status(500).render('error', { message: 'Something went wrong. Please try again.' });
   });
 

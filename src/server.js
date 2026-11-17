@@ -113,7 +113,8 @@ try {
     config: {
       baseUrl, secureCookies: baseUrl.startsWith('https://'), remindersSecret: env.REMINDERS_SECRET?.trim() || null,
       appSecret: appSecret && appSecret.length >= 32 ? appSecret : null,
-      allowSignup: env.ALLOW_SIGNUP === 'true', contactEmail: env.CONTACT_EMAIL?.trim() || null,
+      allowSignup: env.ALLOW_SIGNUP === 'true',
+      clientIpHeader: env.CLIENT_IP_HEADER === 'none' ? null : (env.CLIENT_IP_HEADER || (env.RENDER ? 'true-client-ip' : null)), contactEmail: env.CONTACT_EMAIL?.trim() || null,
       adminEmails: (env.ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean),
       legalName: env.LEGAL_NAME?.trim() || null, legalAddress: env.LEGAL_ADDRESS?.trim() || null, privacyEmail: env.PRIVACY_EMAIL?.trim() || null, trialDays: Number(env.TRIAL_DAYS || 30),
       stripePriceId: env.STRIPE_PRICE_ID?.trim() || null, stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET?.trim() || null,
