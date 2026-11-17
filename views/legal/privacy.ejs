@@ -1,0 +1,62 @@
+<p>This policy explains what personal data Fileready handles, why, who helps us handle it, how long we keep it, and your rights. It is written to meet the EU General Data Protection Regulation (GDPR) and Irish data protection law.</p>
+
+<h2>Who we are</h2>
+<%- include('_who') %>
+
+<h2>Our two roles</h2>
+<p>Fileready handles personal data in two different ways.</p>
+<ul>
+  <li><strong>As a controller</strong>, for data about the people who use or ask about Fileready: staff at mortgage broker firms, people who request a demo, and visitors to this website. This policy covers that data in full.</li>
+  <li><strong>As a processor</strong>, for data about a broker firm's own clients: their names, contact details and the documents they upload. The broker firm decides why that data is collected and is responsible for it. We handle it only on the firm's instructions, under our <a href="/dpa">data processing agreement</a>. The section "If you are a broker's client" below explains what this means for you.</li>
+</ul>
+
+<h2>What we collect, why, and our legal basis</h2>
+<h3>Demo requests</h3>
+<p>When you ask for a demo we receive your name, firm, email, phone number (if you give it) and any message. It is sent to our inbox by email and is not stored in the Fileready app. We use it only to reply and arrange the demo. Our legal basis is taking steps at your request before entering a contract, and our legitimate interest in answering enquiries. If you don't become a customer, we delete it within 12 months.</p>
+<h3>Staff accounts at broker firms</h3>
+<p>For each person with a login we keep their name, work email, role, when they last logged in and their settings. Passwords are stored only as a one-way scrambled value that can't be turned back into the password. If two-step login is on, the authenticator key is stored encrypted and recovery codes are stored scrambled. Our legal basis is the contract with the person's firm.</p>
+<h3>Activity records</h3>
+<p>Fileready keeps an audit trail of actions such as logins, uploads, downloads, document reviews, reminders and deletions, including the time and the IP address the action came from. This lets firms show who did what and lets us detect and investigate misuse. Our legal basis is our legitimate interest, and the firm's, in keeping the service secure and accountable.</p>
+<h3>Billing</h3>
+<p>If a firm subscribes, we keep the firm's billing status and the customer and subscription references that Stripe gives us. Card details go directly to Stripe; we never see or store them. Our legal basis is the contract, and our legal obligation to keep accounting records.</p>
+<h3>Emails and texts we send</h3>
+<p>Fileready sends service emails to staff (password resets, invitations, upload alerts and an optional morning summary that each person can turn off) and sends reminders to a firm's clients on the firm's behalf. We don't send marketing emails from the app.</p>
+
+<h2 id="client">If you are a broker's client</h2>
+<p>If your mortgage broker uses Fileready, they will have given us your name and your email address or mobile number so that we can send you a checklist and reminders on their behalf. Fileready stores the documents you upload, the file names, when you uploaded them, the IP address you uploaded from, and a record of the reminders sent to you.</p>
+<p>Your broker is the controller of this data. We use it only to provide the service to your broker, and never for our own purposes. Your documents are kept in private storage in Ireland, and only your broker's team can open them. They are deleted when your broker deletes them or, automatically, at the end of the retention period your broker has set (6 years after your case is closed, unless your broker has chosen a different period).</p>
+<p>To access, correct or delete your data, or if you have a question about how it is used, contact your broker. If you contact us instead, we will pass your request to them and help them answer it.</p>
+
+<h2>Cookies</h2>
+<p>Fileready uses one cookie, <code>fr_session</code>. It is set only when a staff member logs in, keeps them logged in for up to 12 hours, and can't be read by scripts on the page. It is strictly necessary for the login you asked for, so the law does not require consent for it. We don't use analytics, advertising or social media cookies or trackers, and the website loads no scripts or fonts from other companies. If that ever changes, we will ask for your consent first.</p>
+
+<h2>Who helps us</h2>
+<p>We use these service providers (sub-processors). Each one handles data only to provide its service to us, under a contract that protects it.</p>
+<ul>
+  <li><strong>Supabase</strong>: database and file storage, hosted in its EU West (Ireland) region</li>
+  <li><strong>Render</strong>: runs the web app, hosted in Frankfurt, Germany</li>
+  <li><strong>Brevo</strong> (Sendinblue SAS, France): sends emails and text messages</li>
+  <li><strong>Stripe</strong>: subscription payments, only for firms that subscribe</li>
+</ul>
+<p>We never sell personal data. We share it with others only if the law requires us to, for example in response to a valid court order.</p>
+<p>Data is stored in the European Economic Area. Some of our providers are companies based in the United States. Where data could be accessed from outside the EEA, for example by a provider's support staff, the provider relies on safeguards approved under the GDPR, such as the EU Standard Contractual Clauses or the EU-US Data Privacy Framework.</p>
+
+<h2>How long we keep data</h2>
+<ul>
+  <li>Demo requests: up to 12 months if you don't become a customer.</li>
+  <li>Staff accounts and activity records: while the firm's account is open, then deleted within 30 days of the account closing.</li>
+  <li>Billing records: 6 years after the end of the financial year they relate to, as Irish tax law requires.</li>
+  <li>Clients' documents and details: as set by the broker firm, as described above.</li>
+  <li>Login sessions end after 12 hours, password reset links after 1 hour, and client upload links after 14 days.</li>
+</ul>
+<p>Deleted data can remain in our providers' backups for a short time, normally no more than 30 days, before it is overwritten.</p>
+
+<h2>How we protect it</h2>
+<p>Every connection is encrypted, each firm's data is kept apart inside the database, files are in private storage, and access is logged. The <a href="/security">security page</a> has the details.</p>
+
+<h2>Your rights</h2>
+<p>You have the right to ask for a copy of your personal data, to have it corrected or deleted, to restrict or object to how it is used, and to receive it in a portable format. Where we rely on legitimate interests, you can object at any time. To use any of these rights<% if (legal.email) { %>, email <a href="mailto:<%= legal.email %>"><%= legal.email %></a><% } else { %>, contact us<% } %>. We will reply within one month.</p>
+<p>You can also complain to the Data Protection Commission, Ireland's data protection regulator, at <a href="https://www.dataprotection.ie">www.dataprotection.ie</a>. We'd appreciate the chance to sort out your concern first.</p>
+
+<h2>Changes to this policy</h2>
+<p>If we change this policy, we'll update the date at the top. If a change is significant, we'll also tell firms by email before it takes effect.</p>

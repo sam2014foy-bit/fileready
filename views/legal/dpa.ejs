@@ -1,0 +1,56 @@
+<p>This data processing agreement ("DPA") forms part of the <a href="/terms">terms of service</a> between your firm and us. It meets the requirements of Article 28 of the GDPR for the personal data we handle on your firm's behalf. If this DPA and the terms conflict on data protection, this DPA wins.</p>
+
+<h2>1. Parties and roles</h2>
+<p>Your firm is the <strong>controller</strong> and we are the <strong>processor</strong> of the client personal data described in section 2.</p>
+<%- include('_who') %>
+
+<h2>2. Details of the processing</h2>
+<ul>
+  <li><strong>Subject matter and purpose:</strong> providing Fileready to your firm, which means requesting documents from your clients, sending them reminders, receiving and storing what they upload, letting your team review and download it, and deleting it.</li>
+  <li><strong>Duration:</strong> for as long as the terms are in force, plus the 30-day period after they end described in section 4.8.</li>
+  <li><strong>Data subjects:</strong> your firm's clients and prospective clients, and your firm's staff.</li>
+  <li><strong>Types of personal data:</strong> names, email addresses and mobile numbers; the documents clients upload, which typically include identity documents, proof of address, payslips, employment and tax statements, bank and savings statements, and may include PPS numbers and other financial details; file names, upload times and IP addresses; reminders sent; case notes your team adds.</li>
+  <li><strong>Special category data:</strong> Fileready is not designed for it. It may be included only if a client chooses to upload it or your team adds it. You should avoid requesting it unless you need it.</li>
+</ul>
+
+<h2>3. Your firm's instructions and obligations</h2>
+<p>Your instructions to us are these terms, your firm's settings in Fileready, and the actions your team takes in the app. You are responsible for having a lawful basis for the processing, for telling your clients about it, and for making sure your instructions comply with data protection law.</p>
+
+<h2>4. Our obligations</h2>
+<p><strong>4.1 Instructions.</strong> We process client personal data only on your documented instructions, unless EU or Irish law requires otherwise, in which case we'll tell you first unless the law forbids it. We'll tell you if we think an instruction breaks data protection law.</p>
+<p><strong>4.2 Confidentiality.</strong> Anyone we allow to process client personal data is bound by a duty of confidentiality.</p>
+<p><strong>4.3 Security.</strong> We take appropriate technical and organisational measures to protect client personal data, including those listed in Annex 1.</p>
+<p><strong>4.4 Sub-processors.</strong> You give general authorisation for us to use the sub-processors listed in Annex 2. We'll give your firm's owners at least 30 days' notice by email before adding or replacing one. If you object on reasonable data protection grounds and we can't resolve it, you may end the agreement before the change takes effect and we'll refund any prepaid fees for the remaining period. We impose data protection obligations on each sub-processor equivalent to those in this DPA, and we remain responsible to you for their work.</p>
+<p><strong>4.5 Data subject requests.</strong> Fileready lets you view, correct, export and delete client data yourself. If we receive a request directly from one of your clients, we'll pass it to you without undue delay and won't respond to it ourselves unless you ask us to. We'll give you reasonable help with requests you can't handle through the app.</p>
+<p><strong>4.6 Other help.</strong> Taking into account the information available to us, we'll give you reasonable help with your security obligations, data protection impact assessments and consultations with the Data Protection Commission.</p>
+<p><strong>4.7 Personal data breaches.</strong> If we become aware of a personal data breach affecting client personal data, we'll tell you without undue delay, and in any case within 48 hours, so that you can meet your own 72-hour reporting duty. We'll tell you what we know about the nature of the breach, the data and people likely affected, the likely consequences, and what we are doing about it, and keep you updated as we learn more.</p>
+<p><strong>4.8 End of processing.</strong> While the agreement is in force you can export any case as a zip file. When the agreement ends you have 30 days to ask us for an export of all your firm's data. After those 30 days we delete all client personal data, unless EU or Irish law requires us to keep it. Deleted data can remain in our providers' backups for a short time, normally no more than 30 days, before it is overwritten.</p>
+<p><strong>4.9 Demonstrating compliance and audits.</strong> We'll give you the information you reasonably need to show that we meet this DPA. You may audit our compliance, or appoint an independent auditor bound by confidentiality to do so, once a year on 30 days' written notice, at your own cost, and in a way that doesn't put other customers' data at risk. More frequent audits are allowed after a personal data breach or if a regulator requires one.</p>
+
+<h2>5. Where data is processed</h2>
+<p>Client personal data is stored in the European Economic Area, as set out in Annex 2. We'll only transfer it outside the EEA, or allow a sub-processor to, where the GDPR's transfer rules are met, for example under the EU Standard Contractual Clauses or the EU-US Data Privacy Framework.</p>
+
+<h2>6. Liability</h2>
+<p>Each party's liability under this DPA is subject to the limits in the terms of service, except where the law doesn't allow liability to be limited.</p>
+
+<h2>Annex 1: Security measures</h2>
+<ul>
+  <li>All connections encrypted with HTTPS, with browsers told to use HTTPS only.</li>
+  <li>Data stored with providers that encrypt it at rest, in the EU West (Ireland) region.</li>
+  <li>Each firm's data kept apart by row-level security inside the database, so one firm's account can't read another's data even if there were a fault in the app.</li>
+  <li>Uploaded files kept in private storage and only given to logged-in staff of the firm that requested them.</li>
+  <li>Client upload links that are private, expire after 14 days and are replaced with each reminder; uploads checked by their contents, with only PDFs and images accepted.</li>
+  <li>Passwords stored only as scrypt hashes; optional two-step login with an authenticator app; logins locked for 15 minutes after repeated failures; sessions that end after 12 hours.</li>
+  <li>An audit trail of logins, uploads, downloads, reviews, reminders and deletions that can't be edited.</li>
+  <li>Firm-level roles, and an option for advisers to see only their own cases.</li>
+  <li>Automatic deletion of closed cases after the retention period your firm sets.</li>
+  <li>Service keys held only on our servers, each with the least access it needs.</li>
+</ul>
+
+<h2>Annex 2: Sub-processors</h2>
+<ul>
+  <li><strong>Supabase</strong>: database and file storage. Location: EU West (Ireland).</li>
+  <li><strong>Render</strong>: application hosting. Location: Frankfurt, Germany.</li>
+  <li><strong>Brevo</strong> (Sendinblue SAS): email and text message delivery to your clients and staff. Location: France (EU).</li>
+  <li><strong>Stripe</strong>: subscription payments. Processes only your firm's billing details, never client data.</li>
+</ul>

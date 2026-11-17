@@ -1,0 +1,16 @@
+<%- include('partials/head', { title: title }) %>
+<main class="client-page legal-page">
+  <div class="client-top"><a class="wordmark legal-word" href="/"><%- include('partials/mark') %><span>Fileready</span></a></div>
+  <nav class="legal-nav" aria-label="Legal">
+    <a href="/privacy" <%- doc === 'privacy' ? 'aria-current="page"' : '' %>>Privacy policy</a>
+    <a href="/terms" <%- doc === 'terms' ? 'aria-current="page"' : '' %>>Terms of service</a>
+    <a href="/dpa" <%- doc === 'dpa' ? 'aria-current="page"' : '' %>>Data processing agreement</a>
+    <a href="/security">Security</a>
+  </nav>
+  <h1><%= title %></h1>
+  <p class="muted legal-date">Last updated 17 November 2026</p>
+  <section class="surface"><div class="surface-body prose">
+    <%- include('legal/' + doc) %>
+  </div></section>
+</main>
+</body></html>

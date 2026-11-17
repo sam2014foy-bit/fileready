@@ -403,3 +403,21 @@ test('the demo form emails the request to the contact address, with reply-to set
   assert.equal(mailer.outbox.length, before + 1, 'bots are ignored quietly');
   assert.equal((await request(app).get('/demo')).status, 404, 'off without CONTACT_EMAIL');
 });
+
+// ------------------------------------------------------------- legal pages
+test('privacy, terms and DPA pages are public, use the configured business details, and are linked', async () => {
+  const site = createApp({ db, storage: localDiskStorage(storageDir), mailer, config: { baseUrl: BASE, legalName: 'Test Trading Ltd', legalAddress: '1 Main Street, Cork', privacyEmail: 'privacy@fileready.test' } });
+  for (const [url, title] of [['/privacy', 'Privacy policy'], ['/terms', 'Terms of service'], ['/dpa', 'Data processing agreement']]) {
+    const res = await request(site).get(url);
+    assert.equal(res.status, 200, url);
+    assert.match(res.text, new RegExp(`<h1>${title}</h1>`));
+    assert.match(res.text, /Test Trading Ltd<\/strong>, 1 Main Street, Cork/);
+    assert.match(res.text, /mailto:privacy@fileready\.test/);
+  }
+  const plain = await request(app).get('/privacy');
+  assert.match(plain.text, /run by <strong>Fileready<\/strong>\./, 'falls back to the product name');
+  assert.match((await request(app).get('/dpa')).text, /within 48 hours/);
+  const home = await request(app).get('/');
+  for (const l of ['/privacy', '/terms', '/dpa']) assert.ok(home.text.includes(`href="${l}"`), `home links ${l}`);
+  assert.match((await request(app).get('/signup')).text, /href="\/dpa"/);
+});

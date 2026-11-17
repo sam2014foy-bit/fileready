@@ -47,3 +47,9 @@ services:
         sync: false
       - key: CONTACT_EMAIL
         sync: false
+      - key: LEGAL_NAME
+        sync: false
+      - key: LEGAL_ADDRESS
+        sync: false
+      - key: PRIVACY_EMAIL
+        sync: false

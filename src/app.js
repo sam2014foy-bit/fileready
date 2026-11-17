@@ -31,7 +31,7 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 export function createApp({ db, storage, mailer, sms = null, stripe = null, config }) {
   const cfg = {
     sessionHours: 12, linkDays: 14, secureCookies: false, remindersSecret: null, devOutbox: false,
-    appSecret: null, allowSignup: false, contactEmail: null, trialDays: 30, stripePriceId: null, stripeWebhookSecret: null, ...config,
+    appSecret: null, allowSignup: false, contactEmail: null, legalName: null, legalAddress: null, privacyEmail: null, trialDays: 30, stripePriceId: null, stripeWebhookSecret: null, ...config,
   };
   const app = express();
   const limiter = createLoginLimiter();
@@ -218,6 +218,12 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
   });
 
   // ----------------------------------------------------------- dashboard
+  // ---------------------------------------------------------- legal pages
+  const legal = { name: cfg.legalName || 'Fileready', address: cfg.legalAddress, email: cfg.privacyEmail || cfg.contactEmail };
+  for (const [doc, title] of [['privacy', 'Privacy policy'], ['terms', 'Terms of service'], ['dpa', 'Data processing agreement']]) {
+    app.get(`/${doc}`, (req, res) => res.render('legal', { doc, title, legal }));
+  }
+
   // ---------------------------------------------------------- demo requests
   // A public form that emails the request to CONTACT_EMAIL, with Reply-To set
   // to the visitor so a reply goes straight to them.

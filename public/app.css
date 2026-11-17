@@ -384,3 +384,15 @@ ul.codes { list-style: none; padding: 16px; margin: 16px 0 24px; background: var
 /* When GSAP drives the ring (motion.js), turn off the CSS version. */
 .motion .ring .arc { animation: none; }
 .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+/* legal pages */
+.legal-page { max-width: 780px; }
+.legal-word { color: var(--petrol); padding: 0; } .legal-word span { color: var(--ink); }
+.legal-nav { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 8px 0 28px; font: 500 14px var(--sans); }
+.legal-nav a { color: var(--slate); text-decoration: none; padding-bottom: 3px; border-bottom: 2px solid transparent; }
+.legal-nav a:hover { color: var(--ink); }
+.legal-nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--brass); }
+.legal-page h1 { margin-bottom: 8px; }
+.legal-date { margin: 0 0 28px; }
+.prose h3 { font: 600 16px/1.4 var(--sans); margin: 18px 0 6px; color: var(--ink); }
+.prose code { font-size: .92em; background: var(--porcelain); padding: 1px 5px; border-radius: 4px; }

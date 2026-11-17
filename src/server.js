@@ -22,7 +22,11 @@
 // Sign-up:
 //   ALLOW_SIGNUP           'true' to let new firms sign up for a free trial (off by default)
 //   TRIAL_DAYS             default 30
-//   CONTACT_EMAIL          optional: shown as "Book a demo" on the home page when sign-up is off
+//   CONTACT_EMAIL          optional: receives demo requests from the home page when sign-up is off
+// Legal pages (/privacy, /terms, /dpa):
+//   LEGAL_NAME             who runs Fileready, e.g. "Jane Murphy trading as Fileready" or "Fileready Ltd (CRO 123456)"
+//   LEGAL_ADDRESS          business postal address
+//   PRIVACY_EMAIL          address for data protection requests (defaults to CONTACT_EMAIL)
 // Web:
 //   BASE_URL               optional on Render (RENDER_EXTERNAL_URL is used)
 import pg from 'pg';
@@ -108,7 +112,8 @@ try {
     config: {
       baseUrl, secureCookies: baseUrl.startsWith('https://'), remindersSecret: env.REMINDERS_SECRET?.trim() || null,
       appSecret: appSecret && appSecret.length >= 32 ? appSecret : null,
-      allowSignup: env.ALLOW_SIGNUP === 'true', contactEmail: env.CONTACT_EMAIL?.trim() || null, trialDays: Number(env.TRIAL_DAYS || 30),
+      allowSignup: env.ALLOW_SIGNUP === 'true', contactEmail: env.CONTACT_EMAIL?.trim() || null,
+      legalName: env.LEGAL_NAME?.trim() || null, legalAddress: env.LEGAL_ADDRESS?.trim() || null, privacyEmail: env.PRIVACY_EMAIL?.trim() || null, trialDays: Number(env.TRIAL_DAYS || 30),
       stripePriceId: env.STRIPE_PRICE_ID?.trim() || null, stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET?.trim() || null,
     },
   });
