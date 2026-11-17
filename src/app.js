@@ -1,6 +1,8 @@
 import express from 'express';
 import helmet from 'helmet';
 import compression from 'compression';
+import { createStats } from './stats.js';
+import { createSpamGuard } from './spam.js';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import crypto from 'node:crypto';
@@ -32,7 +34,7 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 export function createApp({ db, storage, mailer, sms = null, stripe = null, config }) {
   const cfg = {
     sessionHours: 12, linkDays: 14, secureCookies: false, remindersSecret: null, devOutbox: false,
-    appSecret: null, allowSignup: false, contactEmail: null, legalName: null, legalAddress: null, privacyEmail: null, trialDays: 30, stripePriceId: null, stripeWebhookSecret: null, ...config,
+    appSecret: null, allowSignup: false, contactEmail: null, adminEmails: [], formMinMs: 3000, legalName: null, legalAddress: null, privacyEmail: null, trialDays: 30, stripePriceId: null, stripeWebhookSecret: null, ...config,
   };
   const app = express();
   const limiter = createLoginLimiter();
@@ -42,6 +44,9 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
   app.set('views', path.join(ROOT, 'views'));
   app.set('trust proxy', 1);
   app.use(compression());
+  const stats = createStats({ db, siteHost: new URL(cfg.baseUrl).hostname });
+  const spam = createSpamGuard({ secret: cfg.appSecret || cfg.remindersSecret || cfg.stripeWebhookSecret, minMs: cfg.formMinMs });
+  const isAdmin = (u) => !!u && cfg.adminEmails.includes(String(u.email).toLowerCase());
   // Changes on every deploy, so browsers can cache CSS and JS for a long time.
   app.locals.v = (process.env.RENDER_GIT_COMMIT || Date.now().toString(36)).slice(0, 10);
   app.disable('x-powered-by');
@@ -114,6 +119,8 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     res.locals.flash = null;
     res.locals.path = req.path;
     res.locals.siteUrl = cfg.baseUrl;
+    res.locals.formToken = () => spam.token();
+    res.locals.isAdmin = false;
     res.locals.allowSignup = cfg.allowSignup; res.locals.dateOnly = dateOnly; res.locals.formatDue = formatDue;
     res.locals.billingBanner = null;
     const token = req.cookies[SESSION_COOKIE];
@@ -135,6 +142,8 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     }
     next();
   });
+  app.use(stats.middleware());
+  app.use((req, res, next) => { res.locals.isAdmin = isAdmin(req.user); next(); });
 
   const requireUser = (req, res, next) => (req.user ? next() : res.redirect('/login'));
   const requireCsrf = (req, res, next) =>
@@ -234,6 +243,23 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     app.get(`/${doc}`, (req, res) => res.render('legal', { doc, title, description, legal }));
   }
 
+  // ---------------------------------------------------------- website stats (admins only)
+  app.get('/admin/stats', requireUser, async (req, res) => {
+    if (!isAdmin(req.user)) return res.status(404).render('not_found');
+    const days = [7, 30, 90].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+    const r = await stats.report(days);
+    // Fill in days with no visits so the chart has no gaps.
+    const byDay = new Map(r.daily.map((d) => [String(d.day).slice(0, 10), d]));
+    const demosByDay = new Map();
+    for (const e of r.daily_events) if (e.name === 'demo_requested' || e.name === 'signup_completed') demosByDay.set(String(e.day).slice(0, 10), (demosByDay.get(String(e.day).slice(0, 10)) || 0) + e.n);
+    const series = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Dublin' }).format(new Date(Date.now() - i * 86400000));
+      series.push({ day: d, visitors: byDay.get(d)?.visitors || 0, views: byDay.get(d)?.views || 0, leads: demosByDay.get(d) || 0 });
+    }
+    res.render('admin_stats', { days, r, series });
+  });
+
   // ---------------------------------------------------------- crawlers and icons
   const site = cfg.baseUrl.replace(/\/$/, '');
   app.get('/robots.txt', (req, res) => {
@@ -281,7 +307,10 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     const v = {};
     for (const [k, max] of [['name', 120], ['firm', 160], ['email', 254], ['phone', 40], ['message', 2000]]) v[k] = String(req.body[k] || '').trim().slice(0, max);
     const again = (status, error) => res.status(status).render('demo', { sent: false, error, values: v });
-    if (req.body.website) return res.render('demo', { sent: true, error: null, values: { ...v, name: v.name || 'there' } }); // bot
+    const verdict = spam.check(req.body);
+    const quietlyDrop = () => { stats.event('spam_blocked'); return res.render('demo', { sent: true, error: null, values: { ...v, name: v.name || 'there' } }); };
+    if (verdict === 'bot' || spam.tooManyLinks(v.name, v.firm, v.message)) return quietlyDrop();
+    if (verdict === 'stale') return again(400, 'This form was open for a long time. Please check your details and press "Request a demo" again.');
     if (!v.name || !v.firm) return again(400, 'Please add your name and firm.');
     if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(v.email)) return again(400, 'Please check your email address.');
     const key = `demo:${req.ip}`;
@@ -299,6 +328,7 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
       console.error('demo request email failed:', err.message);
       return again(502, "Your request couldn't be sent just now. Please try again in a few minutes.");
     }
+    stats.event('demo_requested');
     res.render('demo', { sent: true, error: null, values: v });
   });
 
@@ -834,6 +864,7 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     const key = `forgot|${req.ip}`;
     if (limiter.blocked(key)) return res.status(429).render('forgot', { sent: false, error: 'Too many requests. Wait 15 minutes and try again.' });
     limiter.fail(key);
+    if (spam.check(req.body) === 'bot') return res.render('forgot', { sent: true, error: null });
     const token = randomToken();
     const [u] = await db.asApp((q) => q('SELECT * FROM reset_create($1, $2, $3)', [email, sha256(token), 60]));
     if (u) {
@@ -1280,6 +1311,9 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     const fail = (status, error) => res.status(status).render('signup', { error, values: v, trialDays: cfg.trialDays });
     const key = `signup|${req.ip}`;
     if (limiter.blocked(key)) return fail(429, 'Too many sign-ups from here. Try again later.');
+    const verdict = spam.check(req.body);
+    if (verdict === 'bot') { stats.event('spam_blocked'); return fail(400, 'Something went wrong. Please try again.'); }
+    if (verdict === 'stale') return fail(400, 'This form was open for a long time. Please enter your password again and press the button.');
     if (!v.firm || !v.full_name) return fail(400, 'Add your firm\'s name and your own name.');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email)) return fail(400, 'That email address doesn\'t look right.');
     if (password.length < MIN_PASSWORD_LENGTH) return fail(400, `Your password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
@@ -1295,6 +1329,7 @@ export function createApp({ db, storage, mailer, sms = null, stripe = null, conf
     const token = randomToken();
     await db.asApp((q) => q('SELECT session_create_v2($1, $2, $3, false)', [sha256(token), created.user_id, cfg.sessionHours]));
     setSessionCookie(res, token);
+    stats.event('signup_completed');
     res.redirect(303, '/?welcome=1');
   });
 

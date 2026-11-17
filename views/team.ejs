@@ -36,8 +36,8 @@
   <% if (error) { %><p class="notice error" role="alert"><%= error %></p><% } %>
   <input type="hidden" name="_csrf" value="<%= csrf %>">
   <div class="two">
-    <label>Name <input name="full_name" value="<%= values.full_name || '' %>" required></label>
-    <label>Email <input type="email" name="email" value="<%= values.email || '' %>" required></label>
+    <label>Name <input name="full_name" value="<%= values.full_name || '' %>" required maxlength="100" autocomplete="off"></label>
+    <label>Email <input type="email" name="email" value="<%= values.email || '' %>" required maxlength="200" autocomplete="off"></label>
   </div>
   <label>Role
     <select name="role">

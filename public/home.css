@@ -33,7 +33,7 @@
 
 .h-when { margin: 0 0 14px; font: 600 14px var(--sans); color: var(--brass-ink); }
 .h-step h2 { font: 400 clamp(30px, 3.2vw, 44px)/1.1 var(--serif); letter-spacing: -0.02em; margin: 0 0 16px; }
-.h-step p:last-child { font-size: 18px; line-height: 1.6; color: var(--slate); margin: 0; }
+.h-step h2 + p { font-size: 18px; line-height: 1.6; color: var(--slate); margin: 0; }
 
 .h-stage { position: relative; }
 .h-card { position: sticky; top: calc(50vh - 250px); margin-top: calc(50vh - 286px); background: var(--paper); border: 1px solid var(--mist);
@@ -107,3 +107,7 @@
 .h-event { transition: background-color .4s ease, color .4s ease; }
 .h-event.done { background: var(--good-soft); color: var(--good); }
 .h-event.done .h-dot { background: var(--good); }
+.h-note { margin: 14px 0 0; font-size: 14px; color: var(--slate); }
+.h-end .h-note { margin-top: 16px; }
+.h-step-cta { margin-top: 28px !important; }
+.h-step-cta .btn { color: #fff; height: 52px; padding: 0 26px; font-size: 16px; }

@@ -13,10 +13,10 @@
       <label>Your name <input name="name" autocomplete="name" maxlength="120" value="<%= values.name || '' %>" required autofocus></label>
       <label>Firm <input name="firm" autocomplete="organization" maxlength="160" value="<%= values.firm || '' %>" required></label>
       <label>Work email <input type="email" name="email" autocomplete="email" maxlength="254" value="<%= values.email || '' %>" required></label>
-      <label>Phone <span class="muted">(optional)</span> <input type="tel" name="phone" autocomplete="tel" maxlength="40" value="<%= values.phone || '' %>"></label>
+      <label>Phone <span class="muted">(optional)</span> <input type="tel" name="phone" autocomplete="tel" maxlength="40" value="<%= values.phone || '' %>" pattern="[0-9+\(\)\s.\-]{7,40}" title="Digits, spaces and + only, for example 087 123 4567"></label>
       <label>Anything we should know? <span class="muted">(optional)</span>
         <textarea name="message" rows="3" maxlength="2000" placeholder="e.g. 3 advisers, about 15 applications a month"><%= values.message || '' %></textarea></label>
-      <label class="hp" aria-hidden="true">Leave this empty <input name="website" tabindex="-1" autocomplete="off"></label>
+      <%- include('partials/spam') %>
       <button class="btn wide">Request a demo</button>
     </form>
     <p class="small muted" style="margin-top:20px">We only use these details to arrange your demo. See our <a href="/privacy">privacy policy</a>.</p>

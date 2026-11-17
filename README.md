@@ -42,6 +42,10 @@ required is in. Built for small Irish brokerages.
     just-uploaded document (`public/motion.js`). Both libraries are served from `node_modules` under
     `/static/vendor/`. Motion is skipped for people who ask their device for reduced motion.
     `CONTACT_EMAIL` turns the main button into "Book a 15-minute demo" while sign-up is off.
+  - Website stats (migration 0009): cookieless, first-party counts of public page views, visitors per day,
+    referring sites, `?ref=`/`?utm_source=` campaigns, devices and which demo button was clicked
+    (`?from=`). No IPs or identifiers stored. Visible at `/admin/stats` to logins listed in `ADMIN_EMAILS`.
+  - Spam protection on public forms: honeypot, signed time-trap token, link-stuffing check, rate limits.
   - Public `/security` page, Stripe billing (`/billing`), self sign-up with a free trial (`ALLOW_SIGNUP=true`).
 
 ## Try it on your computer

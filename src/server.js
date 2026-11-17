@@ -23,6 +23,7 @@
 //   ALLOW_SIGNUP           'true' to let new firms sign up for a free trial (off by default)
 //   TRIAL_DAYS             default 30
 //   CONTACT_EMAIL          optional: receives demo requests from the home page when sign-up is off
+//   ADMIN_EMAILS           comma-separated login emails that can see website stats at /admin/stats
 // Legal pages (/privacy, /terms, /dpa):
 //   LEGAL_NAME             who runs Fileready, e.g. "Jane Murphy trading as Fileready" or "Fileready Ltd (CRO 123456)"
 //   LEGAL_ADDRESS          business postal address
@@ -113,6 +114,7 @@ try {
       baseUrl, secureCookies: baseUrl.startsWith('https://'), remindersSecret: env.REMINDERS_SECRET?.trim() || null,
       appSecret: appSecret && appSecret.length >= 32 ? appSecret : null,
       allowSignup: env.ALLOW_SIGNUP === 'true', contactEmail: env.CONTACT_EMAIL?.trim() || null,
+      adminEmails: (env.ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean),
       legalName: env.LEGAL_NAME?.trim() || null, legalAddress: env.LEGAL_ADDRESS?.trim() || null, privacyEmail: env.PRIVACY_EMAIL?.trim() || null, trialDays: Number(env.TRIAL_DAYS || 30),
       stripePriceId: env.STRIPE_PRICE_ID?.trim() || null, stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET?.trim() || null,
     },

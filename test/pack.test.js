@@ -27,6 +27,7 @@ const q1 = async (sql, p) => (await pglite.query(sql, p)).rows[0];
 const lastEmail = () => mailer.outbox[mailer.outbox.length - 1];
 const MONDAY_9AM = new Date('2026-11-16T09:00:00Z');
 const csrfOf = (html) => html.match(/name="_csrf" value="([0-9a-f]{64})"/)[1];
+const formT = async (appInstance, url) => (await request(appInstance).get(url)).text.match(/name="_t" value="([^"]+)"/)[1];
 
 const fakeStripe = {
   webhooks: { constructEvent(body, sig) { if (sig !== 'good-signature') throw new Error('bad'); return JSON.parse(body.toString()); } },
@@ -53,7 +54,7 @@ before(async () => {
   storageDir = await mkdtemp(path.join(os.tmpdir(), 'fr-pack-'));
   app = createApp({
     db, storage: localDiskStorage(storageDir), mailer, sms, stripe: fakeStripe,
-    config: { baseUrl: BASE, appSecret: APP_SECRET, allowSignup: true, stripePriceId: 'price_123', stripeWebhookSecret: 'whsec_test', remindersSecret: 'rs' },
+    config: { baseUrl: BASE, appSecret: APP_SECRET, allowSignup: true, stripePriceId: 'price_123', stripeWebhookSecret: 'whsec_test', remindersSecret: 'rs', formMinMs: 0, adminEmails: ['owner@cork.test'] },
   });
   const firm = async (name) => (await q1('INSERT INTO firms (name) VALUES ($1) RETURNING id', [name])).id;
   s.firmA = await firm('Cork Brokers');
@@ -361,12 +362,12 @@ test('billing: the owner starts a Stripe subscription; webhooks update the statu
 
 // ------------------------------------------------------------- sign up
 test('self sign-up creates a firm on a free trial and logs the owner in; duplicates are refused', async () => {
-  const res = await request.agent(app).post('/signup').type('form').send({ firm: 'Kerry Mortgages', full_name: 'Tadhg Ryan', email: 'tadhg@kerry.test', password: 'tadhgs-long-passphrase', terms: 'yes' });
+  const res = await request.agent(app).post('/signup').type('form').send({ _t: await formT(app, '/signup'), firm: 'Kerry Mortgages', full_name: 'Tadhg Ryan', email: 'tadhg@kerry.test', password: 'tadhgs-long-passphrase', terms: 'yes' });
   assert.equal(res.status, 303);
   const f = await q1(`SELECT billing_status, trial_ends_at > now() + interval '29 days' AS ok FROM firms WHERE name = 'Kerry Mortgages'`);
   assert.equal(f.billing_status, 'trial');
   assert.ok(f.ok);
-  const dup = await request(app).post('/signup').type('form').send({ firm: 'X', full_name: 'Y', email: 'owner@cork.test', password: 'another-long-passphrase', terms: 'yes' });
+  const dup = await request(app).post('/signup').type('form').send({ _t: await formT(app, '/signup'), firm: 'X', full_name: 'Y', email: 'owner@cork.test', password: 'another-long-passphrase', terms: 'yes' });
   assert.equal(dup.status, 400);
   assert.match(dup.text, /already has a Fileready login/);
   const closed = createApp({ db, storage: localDiskStorage(storageDir), mailer, config: { baseUrl: BASE } });
@@ -382,14 +383,16 @@ test('the trial-ended banner shows to the owner once the trial is over', async (
 
 // ------------------------------------------------------------- demo requests
 test('the demo form emails the request to the contact address, with reply-to set to the visitor', async () => {
-  const site = createApp({ db, storage: localDiskStorage(storageDir), mailer, config: { baseUrl: BASE, contactEmail: 'hello@fileready.test' } });
+  const site = createApp({ db, storage: localDiskStorage(storageDir), mailer, config: { baseUrl: BASE, contactEmail: 'hello@fileready.test', formMinMs: 0 } });
   const home = await request(site).get('/');
-  assert.match(home.text, /href="\/demo"><span class="lg">Book a 15-minute demo/);
+  const t = await formT(site, '/demo');
+  assert.match(home.text, /href="\/demo\?from=header"><span class="lg">Book a 15-minute demo/);
+  for (const w of ['hero', 'story', 'footer']) assert.ok(home.text.includes(`href="/demo?from=${w}"`), w);
   assert.ok(!home.text.includes('mailto:'), 'no mail-app link');
   assert.equal((await request(site).get('/demo')).status, 200);
-  assert.equal((await request(site).post('/demo').type('form').send({ name: 'Máire', firm: 'West Cork', email: 'not-an-email' })).status, 400);
+  assert.equal((await request(site).post('/demo').type('form').send({ _t: t, name: 'Máire', firm: 'West Cork', email: 'not-an-email' })).status, 400);
   const before = mailer.outbox.length;
-  const ok = await request(site).post('/demo').type('form').send({ name: 'Máire Ní Bhriain', firm: 'West Cork Mortgages', email: 'maire@westcork.test', phone: '021 555 0101', message: '3 advisers <b>busy</b>' });
+  const ok = await request(site).post('/demo').type('form').send({ _t: t, name: 'Máire Ní Bhriain', firm: 'West Cork Mortgages', email: 'maire@westcork.test', phone: '021 555 0101', message: '3 advisers <b>busy</b>' });
   assert.equal(ok.status, 200);
   assert.match(ok.text, /Thanks, Máire/);
   const e = mailer.outbox[mailer.outbox.length - 1];
@@ -398,7 +401,7 @@ test('the demo form emails the request to the contact address, with reply-to set
   assert.equal(e.replyTo, 'maire@westcork.test');
   assert.equal(e.subject, 'Demo request: West Cork Mortgages');
   assert.match(e.html, /3 advisers &lt;b&gt;busy&lt;\/b&gt;/);
-  const bot = await request(site).post('/demo').type('form').send({ name: 'x', firm: 'y', email: 'a@b.co', website: 'spam.example' });
+  const bot = await request(site).post('/demo').type('form').send({ _t: t, name: 'x', firm: 'y', email: 'a@b.co', website: 'spam.example' });
   assert.equal(bot.status, 200);
   assert.equal(mailer.outbox.length, before + 1, 'bots are ignored quietly');
   assert.equal((await request(app).get('/demo')).status, 404, 'off without CONTACT_EMAIL');
@@ -482,4 +485,72 @@ test('responses are gzip-compressed and CSS is versioned for long caching', asyn
   assert.match(res.text, /\/static\/app\.css\?v=[a-z0-9]+"/);
   const css = await request(app).get('/static/app.css');
   assert.match(css.headers['cache-control'], /max-age=2592000/);
+});
+
+// ------------------------------------------------------------- spam protection
+test('spam guard: honeypot and too-fast submissions are dropped; stale or forged tokens get the form again', async () => {
+  const { createSpamGuard } = await import('../src/spam.js');
+  let now = 1_000_000;
+  const g = createSpamGuard({ secret: 'x', now: () => now });
+  const tok = g.token();
+  assert.equal(g.check({ _t: tok }), 'bot', 'instant submit');
+  now += 5000;
+  assert.equal(g.check({ _t: tok }), 'ok');
+  assert.equal(g.check({ _t: tok, website: 'http://spam' }), 'bot', 'honeypot');
+  assert.equal(g.check({ _t: tok.replace(/.$/, (c) => (c === 'a' ? 'b' : 'a')) }), 'stale', 'forged');
+  assert.equal(g.check({}), 'stale', 'missing');
+  now += 25 * 3600 * 1000;
+  assert.equal(g.check({ _t: tok }), 'stale', 'a day old');
+  assert.equal(g.tooManyLinks('see http://a.example and http://b.example', 'www.c.example'), true);
+  assert.equal(g.tooManyLinks('call me on 087 123 4567'), false);
+});
+
+test('demo form: link spam and bots send no email; a stale form is shown again with the details kept', async () => {
+  const site = createApp({ db, storage: localDiskStorage(storageDir), mailer, config: { baseUrl: BASE, contactEmail: 'hello@fileready.test', formMinMs: 0 } });
+  const t = await formT(site, '/demo');
+  const before = mailer.outbox.length;
+  const spammy = await request(site).post('/demo').type('form').send({ _t: t, name: 'Buy', firm: 'SEO', email: 'a@b.co', message: 'http://x.example http://y.example http://z.example' });
+  assert.equal(spammy.status, 200);
+  const stale = await request(site).post('/demo').type('form').send({ _t: '123.abc', name: 'Real Person', firm: 'Real Firm', email: 'real@firm.ie' });
+  assert.equal(stale.status, 400);
+  assert.match(stale.text, /open for a long time/);
+  assert.match(stale.text, /value="Real Firm"/);
+  assert.equal(mailer.outbox.length, before);
+  const slow = createApp({ db, storage: localDiskStorage(storageDir), mailer, config: { baseUrl: BASE, contactEmail: 'hello@fileready.test' } });
+  const fast = await request(slow).post('/demo').type('form').send({ _t: await formT(slow, '/demo'), name: 'Bot', firm: 'Bot', email: 'bot@bot.co' });
+  assert.equal(fast.status, 200, 'looks accepted to the bot');
+  assert.equal(mailer.outbox.length, before, 'but nothing is sent');
+});
+
+// ------------------------------------------------------------- analytics
+test('website stats count people on public pages (not bots, not staff) without cookies, and only admins see them', async () => {
+  const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148 Safari/604.1';
+  const wait = () => new Promise((r) => setTimeout(r, 150));
+  const home = await request(app).get('/?ref=LinkedIn').set('User-Agent', UA).set('Referer', 'https://www.linkedin.com/feed/');
+  assert.equal(home.headers['set-cookie'], undefined, 'no cookies');
+  await request(app).get('/security').set('User-Agent', UA);
+  await request(app).get('/signup?from=hero').set('User-Agent', UA);
+  await request(app).get('/').set('User-Agent', 'Googlebot/2.1 (+http://www.google.com/bot.html)');
+  await request(app).get('/u/abc').set('User-Agent', UA);
+  await s.owner.agent.get('/security').set('User-Agent', UA);
+  await wait();
+  const rows = (await pglite.query(`SELECT path, referrer, source, cta, device, views, visitors FROM site_stats ORDER BY path`)).rows.map((r) => ({ ...r }));
+  const homeRow = rows.find((r) => r.path === '/');
+  assert.deepEqual(homeRow, { path: '/', referrer: 'linkedin.com', source: 'linkedin', cta: '', device: 'mobile', views: 1, visitors: 1 });
+  assert.equal(rows.filter((r) => r.path === '/').reduce((n, r) => n + r.views, 0), 1, 'bot not counted');
+  assert.equal(rows.find((r) => r.path === '/security').visitors, 0, 'same visitor, same day');
+  assert.equal(rows.find((r) => r.path === '/security').views, 1, 'staff visit not counted');
+  assert.equal(rows.find((r) => r.path === '/signup').cta, 'hero');
+  assert.ok(!rows.some((r) => r.path.startsWith('/u/')), 'client upload pages never tracked');
+  const cols = (await pglite.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'site_stats'`)).rows.map((r) => r.column_name);
+  assert.ok(!cols.some((c) => /ip|agent|hash/.test(c)), 'no IP or identifier column');
+
+  const page = await s.owner.agent.get('/admin/stats?days=7');
+  assert.equal(page.status, 200);
+  assert.match(page.text, /Website stats/);
+  assert.match(page.text, /linkedin\.com/);
+  assert.match(page.text, /Top of page/);
+  const adv = await login('adv@cork.test');
+  assert.equal((await adv.agent.get('/admin/stats')).status, 404, 'non-admins get not found');
+  assert.ok(!(await adv.agent.get('/')).text.includes('/admin/stats'), 'no nav link for non-admins');
 });

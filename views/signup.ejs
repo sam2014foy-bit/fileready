@@ -5,10 +5,11 @@
   <p><%= trialDays %> days free. No card needed to start.</p>
   <% if (error) { %><p class="notice error" role="alert"><%= error %></p><% } %>
   <form method="post" action="/signup" style="margin-top:24px">
-    <label>Firm name <input name="firm" value="<%= values.firm || '' %>" required></label>
-    <label>Your name <input name="full_name" value="<%= values.full_name || '' %>" autocomplete="name" required></label>
-    <label>Work email <input type="email" name="email" value="<%= values.email || '' %>" autocomplete="username" required></label>
-    <label>Password <input type="password" name="password" minlength="12" autocomplete="new-password" required></label>
+      <%- include('partials/spam') %>
+    <label>Firm name <input name="firm" value="<%= values.firm || '' %>" required maxlength="120" autocomplete="organization"></label>
+    <label>Your name <input name="full_name" value="<%= values.full_name || '' %>" autocomplete="name" required maxlength="100"></label>
+    <label>Work email <input type="email" name="email" value="<%= values.email || '' %>" autocomplete="username" required maxlength="200"></label>
+    <label>Password <input type="password" name="password" minlength="12" autocomplete="new-password" required maxlength="200"></label>
     <p class="hint">At least 12 characters.</p>
     <label class="inline small" style="margin-bottom:16px"><input type="checkbox" name="terms" value="yes" required> I accept the <a href="/terms" target="_blank">terms of service</a>, including the <a href="/dpa" target="_blank">data processing agreement</a>, on behalf of my firm, and I've read the <a href="/privacy" target="_blank">privacy policy</a></label>
     <button class="btn wide">Create my account</button>

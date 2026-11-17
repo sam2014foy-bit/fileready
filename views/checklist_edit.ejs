@@ -5,9 +5,9 @@
   <h1><%= t ? 'Edit checklist' : 'New checklist' %></h1>
   <% if (error) { %><p class="notice error" role="alert"><%= error %></p><% } %>
   <input type="hidden" name="_csrf" value="<%= csrf %>">
-  <label>Name <input name="name" value="<%= values.name %>" placeholder="e.g. Self-employed mortgage" required></label>
+  <label>Name <input name="name" value="<%= values.name %>" placeholder="e.g. Self-employed mortgage" required maxlength="120"></label>
   <label>Documents, one per line
-    <textarea name="items" rows="14" required placeholder="Photo ID | Passport or driving licence, in date&#10;Last 2 years' accounts&#10;(optional) Gift letter"><%= values.items %></textarea>
+    <textarea name="items" rows="14" required placeholder="Photo ID | Passport or driving licence, in date&#10;Last 2 years' accounts&#10;(optional) Gift letter" maxlength="8000"><%= values.items %></textarea>
   </label>
   <p class="hint">Add a hint for the client after a <strong>|</strong>. Start a line with <strong>(optional)</strong> for documents that only apply to some clients.</p>
   <button class="btn"><%= t ? 'Save checklist' : 'Create checklist' %></button>

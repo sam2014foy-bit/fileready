@@ -15,7 +15,7 @@
       <p class="muted small" style="margin:0 0 14px">You log in with your password and a code from your authenticator app. <%= (me.totp_recovery || []).length %> recovery codes left.</p>
       <form method="post" action="/account/2fa/disable" class="row-actions" style="align-items:flex-end">
         <input type="hidden" name="_csrf" value="<%= csrf %>">
-        <label style="margin:0;max-width:260px">Your password, to turn it off <input type="password" name="password" autocomplete="current-password" required></label>
+        <label style="margin:0;max-width:260px">Your password, to turn it off <input type="password" name="password" autocomplete="current-password" required maxlength="200"></label>
         <button class="btn danger small">Turn off two-step login</button>
       </form>
     <% } else if (twoStepAvailable) { %>
